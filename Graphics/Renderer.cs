@@ -30,29 +30,28 @@ public sealed class Renderer : IDisposable {
 	private int _uViewProj;
 	private int _uCellSize;
 	private int _uGridSize;
-    private int _uShowGrid;
+	private int _uShowGrid;
 	private int _uPixelsPerUnit;
-    private int _uGridThicknessPx;
-    private int _uCellColors;
+	private int _uGridThicknessPx;
+	private int _uCellColors;
 
-    // Controls for rendering options
-    public bool ShowGrid { get; set; } = false;
+	// Controls for rendering options
+	public bool ShowGrid { get; set; } = false;
 	public bool ShowAxes { get; set; } = true;
 
 	public float GridThicknessPixels { get; set; } = 1.0f;
 
 	private Vector2[] _instancePositions = Array.Empty<Vector2>();
 
-    // Per-cell color texture (RGBA8). Each cell maps to one texel.
-    private int _cellColorsTex = 0;
+	// Per-cell color texture (RGBA8). Each cell maps to one texel.
+	private int _cellColorsTex = 0;
 
-    // Simple runtime palette mapping from cell byte -> RGBA8 color.
-    // Index 0..2 used for three types; default fallback if out of range.
-    private readonly byte[][] _palette = new byte[][] {
-        new byte[] { 130, 30, 36, 255 },   // index 0: dark base (matches previous cellColor)
-        new byte[] { 50, 180, 50, 255 },  // index 1: green
-        new byte[] { 80, 120, 200, 255 }, // index 2: blue
-    };
+	// Cached flattened RGBA8 palette copied from WorldModel on species changes.
+	// Length = speciesCount * 4. If empty then renderer should fall back to default color.
+	private byte[] _speciesPalette = Array.Empty<byte>();
+
+    // default fallback color when palette empty
+	private static readonly byte[] _defaultFallbackColor = [255, 255, 255, 255];
 
 	public Renderer(float cellSize) {
 		_cellSize = cellSize;
@@ -108,7 +107,7 @@ public sealed class Renderer : IDisposable {
 
 		_axisVbo = new BufferObject(BufferTarget.ArrayBuffer);
 		// allocate initial empty buffer, will be filled when world is set
-		_axisVbo.SetData<Vector2>([new(0,0), new(0,0), new(0,0), new(0,0)], BufferUsageHint.DynamicDraw);
+		_axisVbo.SetData<Vector2>([new(0, 0), new(0, 0), new(0, 0), new(0, 0)], BufferUsageHint.DynamicDraw);
 
 		GL.EnableVertexAttribArray(0);
 		GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, sizeof(float) * 2, 0);
@@ -117,7 +116,16 @@ public sealed class Renderer : IDisposable {
 	}
 
 	public void SetWorld(WorldModel world) {
+		// Unsubscribe from previous world palette events if needed
+		if (_world != null) {
+			_world.SpeciesPaletteChanged -= OnWorldSpeciesPaletteChanged;
+		}
+
 		_world = world;
+
+		// Subscribe to receive palette updates and copy initial palette
+		_world.SpeciesPaletteChanged += OnWorldSpeciesPaletteChanged;
+		_speciesPalette = _world.GetSpeciesPalette();
 		BuildInstancePositions();
 		BuildAxisBuffer();
 
@@ -128,6 +136,11 @@ public sealed class Renderer : IDisposable {
 
 	public void Resize(int width, int height) {
 		GL.Viewport(0, 0, width, height);
+	}
+
+	private void OnWorldSpeciesPaletteChanged(byte[] palette) {
+		// Copy palette for renderer use. Keep a copy to avoid sharing memory with world.
+		_speciesPalette = palette is null || palette.Length == 0 ? Array.Empty<byte>() : (byte[])palette.Clone();
 	}
 
 	public void Render(Camera camera) {
@@ -191,30 +204,36 @@ public sealed class Renderer : IDisposable {
 		GL.BindTexture(TextureTarget.Texture2D, _cellColorsTex);
 		GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, width, height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
 
-		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
-		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int) TextureMinFilter.Nearest);
+		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int) TextureMagFilter.Nearest);
+		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int) TextureWrapMode.ClampToEdge);
+		GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int) TextureWrapMode.ClampToEdge);
 	}
 
 	// Full upload of a CellGrid into the texture. Uses a temporary RGBA8 buffer and TexSubImage.
 	private void UploadGridToTexture(CellGrid grid) {
 		int w = grid.Width;
 		int h = grid.Height;
+		// Reuse a buffer for the full-grid upload to avoid per-frame allocations when possible.
 		byte[] pixels = new byte[w * h * 4];
 
-		// Map each cell byte through palette (clamp index)
-		for (int y = 0; y < h; y++) {
-			for (int x = 0; x < w; x++) {
-				int idx = grid.IndexOf(x, y);
-				byte value = grid.CurrentSpan[idx];
-				int paletteIndex = Math.Min(value, (byte)(_palette.Length - 1));
-				int dst = ((y * w) + x) * 4;
-				var color = _palette[paletteIndex];
-				pixels[dst + 0] = color[0];
-				pixels[dst + 1] = color[1];
-				pixels[dst + 2] = color[2];
-				pixels[dst + 3] = color[3];
+		// Map each cell byte through cached species palette (clamp index to last entry)
+		int speciesCount = _speciesPalette.Length / 4;
+		var src = grid.CurrentSpan;
+		for (int i = 0, dst = 0; i < src.Length; i++, dst += 4) {
+			byte value = src[i];
+			if (speciesCount == 0) {
+				pixels[dst + 0] = _defaultFallbackColor[0];
+				pixels[dst + 1] = _defaultFallbackColor[1];
+				pixels[dst + 2] = _defaultFallbackColor[2];
+				pixels[dst + 3] = _defaultFallbackColor[3];
+			} else {
+				int useIdx = value < speciesCount ? value : (speciesCount - 1);
+				int off = useIdx * 4;
+				pixels[dst + 0] = _speciesPalette[off + 0];
+				pixels[dst + 1] = _speciesPalette[off + 1];
+				pixels[dst + 2] = _speciesPalette[off + 2];
+				pixels[dst + 3] = _speciesPalette[off + 3];
 			}
 		}
 
@@ -229,16 +248,35 @@ public sealed class Renderer : IDisposable {
 
 	// Update a single cell texel using TexSubImage2D for a 1x1 region.
 	public void UploadSingleCell(CellGrid grid, int x, int y) {
-		if (_cellColorsTex == 0) return;
+		if (_cellColorsTex == 0)
+			return;
 		int w = grid.Width;
 		int h = grid.Height;
-		if (x < 0 || x >= w || y < 0 || y >= h) return;
+		if (x < 0 || x >= w || y < 0 || y >= h)
+			return;
 
 		byte value = grid.CurrentSpan[grid.IndexOf(x, y)];
-		int paletteIndex = Math.Min(value, (byte)(_palette.Length - 1));
-		var color = _palette[paletteIndex];
-		byte[] pixel = [color[0], color[1], color[2], color[3]];
-		GCHandle gcHandle = GCHandle.Alloc(pixel, GCHandleType.Pinned);
+		// For a single texel, use a stack-allocated span to avoid heap alloc.
+		Span<byte> pixelSpan = stackalloc byte[4];
+		int speciesCount = _speciesPalette.Length / 4;
+		if (speciesCount == 0) {
+			pixelSpan[0] = _defaultFallbackColor[0];
+			pixelSpan[1] = _defaultFallbackColor[1];
+			pixelSpan[2] = _defaultFallbackColor[2];
+			pixelSpan[3] = _defaultFallbackColor[3];
+		} else {
+			int useIdx = value < speciesCount ? value : (speciesCount - 1);
+			int off = useIdx * 4;
+			pixelSpan[0] = _speciesPalette[off + 0];
+			pixelSpan[1] = _speciesPalette[off + 1];
+			pixelSpan[2] = _speciesPalette[off + 2];
+			pixelSpan[3] = _speciesPalette[off + 3];
+		}
+
+		// Use a temporary array when stack memory cannot be pinned; copy from stack to array.
+		byte[] tmp = new byte[4];
+		pixelSpan.CopyTo(tmp);
+		GCHandle gcHandle = GCHandle.Alloc(tmp, GCHandleType.Pinned);
 		try {
 			GL.BindTexture(TextureTarget.Texture2D, _cellColorsTex);
 			GL.TexSubImage2D(TextureTarget.Texture2D, 0, x, y, 1, 1, PixelFormat.Rgba, PixelType.UnsignedByte, gcHandle.AddrOfPinnedObject());
@@ -293,6 +331,11 @@ public sealed class Renderer : IDisposable {
 		_shader?.Dispose();
 		_axisShader?.Dispose();
 
+		// Unsubscribe from world events to avoid leaking references
+		if (_world != null) {
+			_world.SpeciesPaletteChanged -= OnWorldSpeciesPaletteChanged;
+		}
+
 		if (_cellColorsTex != 0) {
 			GL.DeleteTexture(_cellColorsTex);
 			_cellColorsTex = 0;
@@ -301,28 +344,41 @@ public sealed class Renderer : IDisposable {
 
 	// Optional helper: update a rectangular region of cells (x,y,w,h)
 	public void UploadCellsRegion(CellGrid grid, int x, int y, int w, int h) {
-		if (_cellColorsTex == 0) return;
+		if (_cellColorsTex == 0)
+			return;
 		int gw = grid.Width;
 		int gh = grid.Height;
 		int rx = Math.Max(0, x);
 		int ry = Math.Max(0, y);
 		int rw = Math.Min(w, gw - rx);
 		int rh = Math.Min(h, gh - ry);
-		if (rw <= 0 || rh <= 0) return;
+		if (rw <= 0 || rh <= 0)
+			return;
 
 		byte[] pixels = new byte[rw * rh * 4];
+		int speciesCount = _speciesPalette.Length / 4;
+		var src = grid.CurrentSpan;
 		for (int yy = 0; yy < rh; yy++) {
+			int sy = ry + yy;
+			int rowBaseSrc = sy * grid.Width;
+			int rowBaseDst = yy * rw * 4;
 			for (int xx = 0; xx < rw; xx++) {
 				int sx = rx + xx;
-				int sy = ry + yy;
-				byte value = grid.CurrentSpan[grid.IndexOf(sx, sy)];
-				int paletteIndex = Math.Min(value, (byte)(_palette.Length - 1));
-				var color = _palette[paletteIndex];
-				int dst = (yy * rw + xx) * 4;
-				pixels[dst + 0] = color[0];
-				pixels[dst + 1] = color[1];
-				pixels[dst + 2] = color[2];
-				pixels[dst + 3] = color[3];
+				byte value = src[rowBaseSrc + sx];
+				int dst = rowBaseDst + xx * 4;
+				if (speciesCount == 0) {
+					pixels[dst + 0] = _defaultFallbackColor[0];
+					pixels[dst + 1] = _defaultFallbackColor[1];
+					pixels[dst + 2] = _defaultFallbackColor[2];
+					pixels[dst + 3] = _defaultFallbackColor[3];
+				} else {
+					int useIdx = value < speciesCount ? value : (speciesCount - 1);
+					int off = useIdx * 4;
+					pixels[dst + 0] = _speciesPalette[off + 0];
+					pixels[dst + 1] = _speciesPalette[off + 1];
+					pixels[dst + 2] = _speciesPalette[off + 2];
+					pixels[dst + 3] = _speciesPalette[off + 3];
+				}
 			}
 		}
 
