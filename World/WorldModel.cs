@@ -68,9 +68,9 @@ public sealed class WorldModel {
 
 		// TODO: temp test species
 		SetSpeciesList([
-			new SpeciesModel("Empty", new Color4(0f, 0f, 0f, 0f)),
-			new SpeciesModel("Grass", new Color4(0f, 1f, 0f, 1f)),
-			new SpeciesModel("Water", new Color4(0f, 0f, 1f, 1f))
+			new SpeciesModel("Empty", 0, 0, 0, 255),
+			new SpeciesModel("Grass", 0, 200, 0, 255),
+			new SpeciesModel("Water", 0, 150, 200, 255)
 		]);
 	}
 
@@ -148,14 +148,19 @@ public sealed class WorldModel {
 		for (int i = 0; i < _species.Count; i++) {
 			var c = _species[i].Color;
 
-			static byte Conv(float v) =>
-				(byte)Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
-
 			int off = i * 4;
-			_speciesPalette[off + 0] = Conv(c.R);
-			_speciesPalette[off + 1] = Conv(c.G);
-			_speciesPalette[off + 2] = Conv(c.B);
-			_speciesPalette[off + 3] = Conv(c.A);
+			if (c.Length >= 4) {
+				_speciesPalette[off + 0] = c[0];
+				_speciesPalette[off + 1] = c[1];
+				_speciesPalette[off + 2] = c[2];
+				_speciesPalette[off + 3] = c[3];
+			} else {
+				// Fallback to opaque black when species color is missing.
+				_speciesPalette[off + 0] = 0;
+				_speciesPalette[off + 1] = 0;
+				_speciesPalette[off + 2] = 0;
+				_speciesPalette[off + 3] = 255;
+			}
 		}
 
 		// Publish new flattened palette for subscribers (e.g., renderer).

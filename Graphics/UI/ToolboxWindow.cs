@@ -18,7 +18,9 @@ internal sealed class ToolboxWindow
         // Force the UI to a fixed screen location and prevent it from being moved by dragging.
         // Use 0,0 so the UI is positioned at the top-left of the application viewport.
         ImGui.SetNextWindowPos(new Vector2(0, 0), ImGuiCond.Always);
-        ImGui.SetNextWindowSize(new Vector2(260, 80), ImGuiCond.Once);
+
+        // AlwaysAutoResize will size to content, but enforce size constraints
+        ImGui.SetNextWindowSizeConstraints(new Vector2(260, 90), new Vector2(float.MaxValue, float.MaxValue), null);
 
         ImGui.Begin(Title, GetWindowFlags());
 

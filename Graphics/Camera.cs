@@ -79,11 +79,11 @@ public sealed class Camera {
 						_leftDragStarted = true;
 						// Start panning; consume current delta.
 						var drag = new Vector2(input.MouseDeltaX, -input.MouseDeltaY);
-						Position -= drag / MathF.Max(Zoom, 0.001f);
+						Position -= ApplyZoomFactor(drag);
 					}
 				} else {
 					var drag = new Vector2(input.MouseDeltaX, -input.MouseDeltaY);
-					Position -= drag / MathF.Max(Zoom, 0.001f);
+					Position -= ApplyZoomFactor(drag);
 				}
 			}
 		} else {
@@ -94,7 +94,7 @@ public sealed class Camera {
 
 	private void HandleKeyboardMovement(InputState input, float dt) {
 		// Pan speed changes with zoom so it feels stable.
-		var speed = 600.0f / MathF.Max(Zoom, 0.001f);
+		var speed = ApplyZoomFactor(600.0f);
 		if (input.KeyShift)
 			speed *= 2.0f;
 
@@ -117,8 +117,8 @@ public sealed class Camera {
 	public Matrix4 GetViewProjection() {
 		// Orthographic projection in world units.
 		// The camera Position is centered.
-		var halfW = (ViewportWidth * 0.5f) / MathF.Max(Zoom, 0.001f);
-		var halfH = (ViewportHeight * 0.5f) / MathF.Max(Zoom, 0.001f);
+		var halfW = ApplyZoomFactor(ViewportWidth * 0.5f);
+		var halfH = ApplyZoomFactor(ViewportHeight * 0.5f);
 
 		var left = Position.X - halfW;
 		var right = Position.X + halfW;
@@ -131,8 +131,8 @@ public sealed class Camera {
 
 	private Vector2 ScreenToWorld(Vector2 screenPos, float zoomOverride) {
 		// Screen origin is top-left with Y down (from InputState). Convert to NDC-style world coords.
-		var halfW = (ViewportWidth * 0.5f) / MathF.Max(zoomOverride, 0.001f);
-		var halfH = (ViewportHeight * 0.5f) / MathF.Max(zoomOverride, 0.001f);
+		var halfW = ApplyZoomFactor(ViewportWidth * 0.5f, zoomOverride);
+		var halfH = ApplyZoomFactor(ViewportHeight * 0.5f, zoomOverride);
 
 		// Calculate world bounds
 		var left = Position.X - halfW;
@@ -148,4 +148,10 @@ public sealed class Camera {
 
 		return new Vector2(worldX, worldY);
 	}
+
+    private T ApplyZoomFactor<T>(T value, float overrideZoom = -1) where T : struct {
+        // works for both float and Vector2 (OpenTK.Mathematics.Vector2) without duplicating logic.
+        var denom = MathF.Max(overrideZoom >= 0 ? overrideZoom : Zoom, 0.001f);
+        return (T)((dynamic)value / denom);
+    }
 }
