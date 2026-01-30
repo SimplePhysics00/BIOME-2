@@ -7,7 +7,7 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 
-namespace Biome2;
+namespace Biome2.App;
 
 /// <summary>
 /// Owns the window, render loop, input polling, and top level orchestration.
@@ -23,7 +23,7 @@ public sealed class BiomeApp : GameWindow {
 
 	private InputState _input = null!;
 
-	private Graphics.ImGuiController? _ui;
+	private ImGuiController? _ui;
 
     private WorldState _world = null!;
 	private SimulationController _simulation = null!;
@@ -60,7 +60,7 @@ public sealed class BiomeApp : GameWindow {
 		_renderer.SetWorld(_world);
 
 		// Initialize ImGui UI controller
-		_ui = new Graphics.ImGuiController(this);
+		_ui = new ImGuiController(this);
 
 		// Start with the camera showing the full world.
 		_camera.FrameWorld(
@@ -115,8 +115,11 @@ public sealed class BiomeApp : GameWindow {
 
 		_renderer.Render(_camera);
 
-        // Render UI on top of world
-        _ui?.RenderUI(_renderer, _simulation, _camera, _input);
+		// Draw placement highlight overlay (based on input)
+		_renderer.DrawHighlight(_camera, _input);
+
+		// Render UI on top of world
+		_ui?.RenderUI(_renderer, _simulation, _input);
 
 		SwapBuffers();
 

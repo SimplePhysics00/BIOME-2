@@ -15,7 +15,9 @@ namespace Biome2.Simulation;
 /// </summary>
 public sealed class SimulationController : IDisposable {
     private WorldState _world;
-    private readonly object _stepLock = new object();
+	public WorldState World => _world;
+
+	private readonly object _stepLock = new();
 
     // Background stepping
     private CancellationTokenSource? _cts;
@@ -29,6 +31,9 @@ public sealed class SimulationController : IDisposable {
     private List<Models.SimulationRule> _rules = new();
     public IReadOnlyList<Models.SimulationRule> Rules => _rules;
 
+    // Last applied WorldModel request (from file). Used to restart the world to its initial state.
+    private WorldModel? _lastWorldModel;
+
     // Edge handling mode (influences neighbor lookups)
     private EdgeMode _edgeMode = EdgeMode.BORDER;
 
@@ -38,6 +43,59 @@ public sealed class SimulationController : IDisposable {
     private HashSet<int> _layersWithRules = new();
 
     public SimulationClock Clock { get; } = new();
+
+    /// <summary>
+    /// Restart the world to the initial state but with explicit width/height.
+    /// If a last-applied WorldModel exists, it will be re-applied with the
+    /// supplied dimensions overriding the file values. Otherwise a blank world
+    /// will be created with the requested size and the current layer count.
+    /// </summary>
+    public void RestartWorld(int width, int height)
+    {
+        // If we have a last applied request, re-apply it but override sizing.
+        if (_lastWorldModel != null)
+        {
+            var req = new WorldModel(
+                width: Math.Max(1, width),
+                height: Math.Max(1, height),
+                paused: _lastWorldModel.Paused,
+                species: _lastWorldModel.Species,
+                layers: _lastWorldModel.Layers,
+                rules: _lastWorldModel.Rules,
+                edges: _lastWorldModel.Edges
+            );
+
+            ApplyRules(req);
+            return;
+        }
+
+        // No last request: construct a blank world with requested size and preserve layer count.
+        int layerCount = Math.Max(1, _world.LayerCount);
+        var newWorld = new WorldState(Math.Max(1, width), Math.Max(1, height), layerCount);
+
+        // Preserve the previously selected active layer index if possible so the visualized
+        // layer does not change when restarting (layers don't change in this path).
+        int prevActive = _world.ActiveLayerIndex;
+        newWorld.ActiveLayerIndex = Math.Clamp(prevActive, 0, Math.Max(0, newWorld.LayerCount - 1));
+
+        lock (_stepLock)
+        {
+            _world = newWorld;
+            _rules = new List<Models.SimulationRule>();
+            _edgeMode = EdgeMode.BORDER;
+            _ruleIndex = new Dictionary<(int layer, int origin), List<Models.SimulationRule>>();
+            _layersWithRules = new HashSet<int>();
+        }
+
+        try
+        {
+            WorldReplaced?.Invoke(_world);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Exception while notifying WorldReplaced subscribers: {ex.Message}");
+        }
+    }
 
     // Immediate placement for visual feedback; writes both current and next buffers. Caller holds lock.
     public void PlaceImmediate(int layerIndex, int x, int y, byte speciesValue) {
@@ -52,12 +110,9 @@ public sealed class SimulationController : IDisposable {
     }
 
     // Enqueue a lightweight placement request (species chosen by WorldState snapshot during application).
-    public void EnqueuePlacementRequest(int layerIndex, int x, int y) {
-        _world.EnqueuePlacementRequest(layerIndex, x, y);
+    public void EnqueuePlacementRequest(int x, int y) {
+        _world.EnqueuePlacementRequest(x, y);
     }
-
-    // Expose current world for UI and other subsystems that need read/write access.
-    public WorldState World => _world;
 
     public SimulationController(WorldState world) {
         _world = world;
@@ -68,6 +123,7 @@ public sealed class SimulationController : IDisposable {
 		// Start background stepping so simulation can run as fast as possible independent of render.
 		_cts = new CancellationTokenSource();
 		_bgTask = Task.Run(() => BackgroundLoop(_cts.Token));
+
 		// TODO: create default species and rules for Conway's Game of Life
 	}
 
@@ -105,40 +161,49 @@ public sealed class SimulationController : IDisposable {
 		}
 	}
 
-	// Apply rules and species from a parsed file request.
-    public void ApplyRules(WorldModel request) {
-        if (request is null) return;
+	// Apply rules and species from a parsed file world model.
+    public void ApplyRules(WorldModel worldModel) {
+        if (worldModel is null) return;
+
+        // Keep a copy of the last applied world model so the world can be restarted to this initial state.
+        _lastWorldModel = worldModel;
 
         // Immediately apply pause setting so background loop respects it quickly.
-        Clock.Paused = request.Paused;
+        Clock.Paused = worldModel.Paused;
 
         // Determine sizing: prefer file-provided positive values, otherwise keep current world values.
-        int newWidth = request.Width > 0 ? request.Width : Math.Max(1, _world.WidthCells);
-        int newHeight = request.Height > 0 ? request.Height : Math.Max(1, _world.HeightCells);
-        int newLayerCount = (request.Layers != null && request.Layers.Count > 0) ? request.Layers.Count : Math.Max(1, _world.LayerCount);
+        int newWidth = worldModel.Width > 0 ? worldModel.Width : Math.Max(1, _world.WidthCells);
+        int newHeight = worldModel.Height > 0 ? worldModel.Height : Math.Max(1, _world.HeightCells);
+        int newLayerCount = (worldModel.Layers != null && worldModel.Layers.Count > 0) ? worldModel.Layers.Count : Math.Max(1, _world.LayerCount);
 
         // Construct new runtime world state.
         var newWorld = new WorldState(newWidth, newHeight, newLayerCount);
 
+        // Preserve previously selected active layer index where possible so the view
+        // remains on the same layer after applying new rules (unless the new world
+        // has fewer layers, in which case clamp to the last available layer).
+        int prevActive = _world.ActiveLayerIndex;
+        newWorld.ActiveLayerIndex = Math.Clamp(prevActive, 0, Math.Max(0, newWorld.LayerCount - 1));
+
 		// If species list provided, apply it and initialize grids to species index 0.
-		if (request.Species != null && request.Species.Count > 0) {
-            newWorld.SetSpeciesList(request.Species);
+		if (worldModel.Species != null && worldModel.Species.Count > 0) {
+            newWorld.SetSpeciesList(worldModel.Species);
             foreach (var layer in newWorld.Layers) {
                 layer.Grid.Clear(0);
             }
         }
 
         // If layer names provided, copy them into the world model.
-        if (request.Layers != null && request.Layers.Count > 0) {
-            int min = Math.Min(request.Layers.Count, newWorld.Layers.Count);
-            for (int i = 0; i < min; i++) newWorld.Layers[i].Name = request.Layers[i] ?? string.Empty;
-            if (request.Layers.Count > newWorld.Layers.Count) Logger.Warn("More layer names provided by rules file than world contains; extra layer names ignored.");
-            else if (request.Layers.Count < newWorld.Layers.Count) Logger.Warn("Fewer layer names provided by rules file than world contains; remaining layers keep default names.");
+        if (worldModel.Layers != null && worldModel.Layers.Count > 0) {
+            int min = Math.Min(worldModel.Layers.Count, newWorld.Layers.Count);
+            for (int i = 0; i < min; i++) newWorld.Layers[i].Name = worldModel.Layers[i] ?? string.Empty;
+            if (worldModel.Layers.Count > newWorld.Layers.Count) Logger.Warn("More layer names provided by rules file than world contains; extra layer names ignored.");
+            else if (worldModel.Layers.Count < newWorld.Layers.Count) Logger.Warn("Fewer layer names provided by rules file than world contains; remaining layers keep default names.");
         }
 
         // Prepare rules and edge mode
-        var fileRules = request.Rules ?? Array.Empty<RulesModel>();
-        var newEdgeMode = request.Edges;
+        var fileRules = worldModel.Rules ?? [];
+        var newEdgeMode = worldModel.Edges;
 
         // Convert file models to simulation models using the new world for name resolution.
         var (simRules, simIndex, simLayersWithRules, warnings) = RuleSetBuilder.Build(fileRules, newWorld);
@@ -175,7 +240,7 @@ public sealed class SimulationController : IDisposable {
 
 	private void StepOnce() {
 		// Only prepare and process layers that have rules.
-		var layersToProcess = _layersWithRules.Count > 0 ? _layersWithRules.ToArray() : Array.Empty<int>();
+		var layersToProcess = _layersWithRules.Count > 0 ? [.. _layersWithRules] : Array.Empty<int>();
 
         // Prepare next buffers only for layers that will be processed.
         foreach (int li in layersToProcess) {

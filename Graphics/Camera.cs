@@ -13,9 +13,10 @@ public sealed class Camera {
 
 	public Vector2 Position { get; private set; } = Vector2.Zero;
 	public float Zoom { get; private set; } = 1.0f;
+	private float MinFitZoom = 1.0f;
 
     // Right mouse drag state for panning with a small movement threshold.
-	private const float MinFarnessZoomFactor = 1.0f;
+	//private const float MinFarnessZoomFactor = 1.0f;
 	private const float MaxClosenessZoomFactor = 300.0f;
 	private const float ZoomScrollWheelFactor = 0.2f;
 
@@ -33,7 +34,8 @@ public sealed class Camera {
 		// Fit world into viewport.
 		var scaleX = ViewportWidth / worldWidth;
 		var scaleY = ViewportHeight / worldHeight;
-		Zoom = MathF.Min(scaleX, scaleY) * 0.9f;
+		MinFitZoom = MathF.Min(scaleX, scaleY) * 0.9f;
+		Zoom = MinFitZoom;
 
 		Position = new Vector2(worldWidth * 0.5f, worldHeight * 0.5f);
 	}
@@ -52,7 +54,7 @@ public sealed class Camera {
 			var worldBefore = ScreenToWorld(new Vector2(input.MouseX, input.MouseY), Zoom);
 
 			var zoomFactor = 1.0f + (input.MouseWheelDelta * ZoomScrollWheelFactor);
-			Zoom = Math.Clamp(Zoom * zoomFactor, MinFarnessZoomFactor, MaxClosenessZoomFactor);
+			Zoom = Math.Clamp(Zoom * zoomFactor, MinFitZoom, MaxClosenessZoomFactor);
 
 			// World position under the cursor after zoom (with unchanged Position)
 			var worldAfter = ScreenToWorld(new Vector2(input.MouseX, input.MouseY), Zoom);

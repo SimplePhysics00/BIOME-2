@@ -104,4 +104,95 @@ void main()
 {
     fragColor = vec4(uColor, 1.0);
 }";
+
+	public const string HighlightVertex = @"
+#version 450 core
+
+layout(location = 0) in vec2 aLocalPos;    // 0..1 local quad
+layout(location = 1) in vec4 aInstance; // origin.xy, size.xy
+
+uniform mat4 uViewProj;
+uniform float uCellSize;
+
+out vec2 vRegionUv;    // coordinates in cell units (0..size)
+out vec2 vRegionNorm;  // normalized coordinates across region (0..1)
+out vec2 vWorldPos;
+out vec2 vInstanceSize;
+
+void main()
+{
+    vec2 aInstancePos = aInstance.xy;
+    vec2 aInstanceSize = aInstance.zw;
+
+    vec2 regionSizeWorld = aInstanceSize * uCellSize;
+    vec2 worldPos = aInstancePos + aLocalPos * regionSizeWorld;
+
+    // vRegionUv in cell units
+    vRegionUv = aLocalPos * aInstanceSize;
+    vRegionNorm = aLocalPos; // since aLocalPos goes 0..1 across region
+    vWorldPos = worldPos;
+    vInstanceSize = aInstanceSize;
+
+    gl_Position = uViewProj * vec4(worldPos.xy, 0.0, 1.0);
+}
+";
+
+	public const string HighlightFragment = @"
+#version 450 core
+
+in vec2 vRegionUv;
+in vec2 vRegionNorm;
+in vec2 vWorldPos;
+in vec2 vInstanceSize;
+out vec4 fragColor;
+
+uniform float uTime; // seconds, for animation
+uniform float uPixelsPerUnit;
+uniform float uBorderThicknessPx; // thickness in pixels
+uniform float uCellSize; // world units per cell
+uniform float uDotFrequency; // dots per cell along border
+uniform vec3 uColorA; // dot color A (e.g., black)
+uniform vec3 uColorB; // dot color B (e.g., white)
+uniform float uAlpha;
+
+float aa(float x, float w) {
+    // simple linear AA over w
+    return clamp(x / w, 0.0, 1.0);
+}
+
+void main()
+{
+    // Border thickness in world units and normalized relative to instance size
+    float borderWorld = uBorderThicknessPx / max(uPixelsPerUnit, 0.01);
+    vec2 regionWorld = vInstanceSize * uCellSize;
+    float bn = min(borderWorld / max(regionWorld.x, 1e-6), borderWorld / max(regionWorld.y, 1e-6));
+    bn = clamp(bn, 0.001, 0.5);
+
+    float dLeft = vRegionNorm.x;
+    float dRight = 1.0 - vRegionNorm.x;
+    float dDown = vRegionNorm.y;
+    float dUp = 1.0 - vRegionNorm.y;
+    float distToEdge = min(min(dLeft, dRight), min(dDown, dUp));
+
+    if (distToEdge > bn) discard;
+
+    // Determine which edge we're on and compute along coordinate in cell units
+    float along;
+    float length;
+    if (dLeft <= bn || dRight <= bn) {
+        along = vRegionUv.y;
+        length = vInstanceSize.y;
+    } else {
+        along = vRegionUv.x;
+        length = vInstanceSize.x;
+    }
+
+    // Dotted pattern along edge; animate shift with time
+    float p = along * uDotFrequency;
+    float phase = fract(p + uTime * 4.0);
+    float choice = step(0.5, phase);
+    vec3 col = mix(uColorA, uColorB, choice);
+    fragColor = vec4(col, uAlpha);
+}
+";
 }

@@ -25,7 +25,7 @@ public sealed class SpeciesModel {
 		switch (color.Length) {
 			case > 4:
 				Logger.Info($"Species \"{name}\" given color array >= 4, copying first 4 bytes.");
-				color.Slice(0, 4).CopyTo(_color);
+				color[..4].CopyTo(_color);
 
 				break;
 			case 3:

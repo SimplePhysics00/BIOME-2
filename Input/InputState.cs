@@ -8,7 +8,7 @@ namespace Biome2.Input;
 /// Centralized, frame coherent input snapshot.
 /// Later, ImGui can mark when it wants to capture mouse and keyboard input.
 /// </summary>
-public sealed class InputState {
+public sealed partial class InputState {
 	public float MouseX { get; private set; }
 	public float MouseY { get; private set; }
 	public float MouseDeltaX { get; private set; }
@@ -34,8 +34,10 @@ public sealed class InputState {
 	private float _lastMouseX;
 	private float _lastMouseY;
 
-    // Right-drag state for panning
-    private bool _rightMouseWasDown;
+	private PlacementMode _placementMode = PlacementMode.Pixel;
+
+	// Right-drag state for panning
+	private bool _rightMouseWasDown;
     private bool _rightDragStarted;
     private Vector2 _rightDragStart;
 
@@ -52,8 +54,25 @@ public sealed class InputState {
         _selectedSpecies = indices ?? Array.Empty<int>();
     }
 
-    // Central entry for handling interactions that involve camera panning and painting.
-    public void HandleInteractions(Graphics.Camera camera, Graphics.Renderer renderer, Simulation.SimulationController simulation) {
+    public PlacementMode GetPlacementMode() => _placementMode;
+
+    public bool IsPlacing() => _placing;
+
+    public (int X, int Y) GetPlacementStart() => (_lastPlacedX, _lastPlacedY);
+
+    // Compute hovered cell coordinates given camera and renderer
+    public (int X, int Y) GetHoverCell(Graphics.Camera camera, Graphics.Renderer renderer) {
+        var worldPos = camera.ScreenToWorld(new OpenTK.Mathematics.Vector2(MouseX, MouseY), camera.Zoom);
+        float cs = renderer.CellSize;
+        int cellX = (int)Math.Floor(worldPos.X / cs);
+        int cellY = (int)Math.Floor(worldPos.Y / cs);
+        return (cellX, cellY);
+    }
+	
+    public void SetPlacementMode(PlacementMode mode) => _placementMode = mode;
+
+	// Central entry for handling interactions that involve camera panning and painting.
+	public void HandleInteractions(Graphics.Camera camera, Graphics.Renderer renderer, Simulation.SimulationController simulation) {
         // If UI wants the mouse, do nothing.
         if (GuiWantsMouse) {
             // reset drag/placing states to avoid stale state
@@ -92,15 +111,13 @@ public sealed class InputState {
         if (MouseLeftDown) {
             HandlePlacement(camera, renderer, simulation);
         } else {
+            // If we were placing in Zone mode, finalize the rectangle on release
+            if (_placing && _placementMode == PlacementMode.Zone) {
+                FinalizeZonePlacement(camera, renderer, simulation);
+            }
+
             EndPlacement();
         }
-    }
-
-    // End active placement (called when left button released)
-    public void EndPlacement() {
-        _placing = false;
-        _lastPlacedX = -1;
-        _lastPlacedY = -1;
     }
 
     // Handle placement action: picks cell under cursor and enqueues request if cell changed.
@@ -113,22 +130,69 @@ public sealed class InputState {
         int cellX = (int)Math.Floor(worldPos.X / cs);
         int cellY = (int)Math.Floor(worldPos.Y / cs);
 
-        if (!_placing || cellX != _lastPlacedX || cellY != _lastPlacedY) {
-            // snapshot selected species indices
-            var sel = _selectedSpecies;
-            if (sel.Length == 0) return;
+        if (_placementMode == PlacementMode.Pixel) {
+            if (!_placing || cellX != _lastPlacedX || cellY != _lastPlacedY) {
+                // snapshot selected species indices
+                var sel = _selectedSpecies;
+                if (sel.Length == 0) return;
 
-            simulation.SetSelectedSpeciesIndices(sel);
-            simulation.EnqueuePlacementRequest(simulation.World.ActiveLayerIndex, cellX, cellY);
+                simulation.SetSelectedSpeciesIndices(sel);
+                simulation.EnqueuePlacementRequest(cellX, cellY);
 
-            // Request immediate visual update (renderer uses world's current buffer)
-            //renderer.UploadSingleCell(simulation.World.ActiveLayer.Grid, cellX, cellY);
+                // Request immediate visual update (renderer uses world's current buffer)
+                //renderer.UploadSingleCell(simulation.World.ActiveLayer.Grid, cellX, cellY);
 
-            _lastPlacedX = cellX;
-            _lastPlacedY = cellY;
-            _placing = true;
+                _lastPlacedX = cellX;
+                _lastPlacedY = cellY;
+                _placing = true;
+            }
+        } else {
+            // Zone mode: on initial press record start coordinates, do not enqueue yet
+            if (!_placing) {
+                _lastPlacedX = cellX;
+                _lastPlacedY = cellY;
+                _placing = true;
+            }
+            // optional: could provide live preview here
         }
     }
+
+    private void FinalizeZonePlacement(Graphics.Camera camera, Graphics.Renderer renderer, Simulation.SimulationController simulation) {
+        // compute end cell from current mouse
+        var worldPos = camera.ScreenToWorld(new OpenTK.Mathematics.Vector2(MouseX, MouseY), camera.Zoom);
+        float cs = renderer.CellSize;
+        int endX = (int)Math.Floor(worldPos.X / cs);
+        int endY = (int)Math.Floor(worldPos.Y / cs);
+
+        int startX = _lastPlacedX;
+        int startY = _lastPlacedY;
+        if (startX < 0 || startY < 0) return;
+
+        int minX = Math.Min(startX, endX);
+        int maxX = Math.Max(startX, endX);
+        int minY = Math.Min(startY, endY);
+        int maxY = Math.Max(startY, endY);
+
+        var sel = _selectedSpecies;
+        if (sel.Length == 0) return;
+
+        // Snapshot selection once
+        simulation.SetSelectedSpeciesIndices(sel);
+
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                simulation.EnqueuePlacementRequest(x, y);
+            }
+        }
+    }
+
+
+	// End active placement (called when left button released)
+	public void EndPlacement() {
+		_placing = false;
+		_lastPlacedX = -1;
+		_lastPlacedY = -1;
+	}
 
 	public void UpdateFrom(GameWindow window) {
 		var mouse = window.MouseState;

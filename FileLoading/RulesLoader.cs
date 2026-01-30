@@ -169,7 +169,7 @@ public sealed class RulesLoader {
                                 continue;
                             }
                             // validate count
-                            if (count <= 0) {
+                            if (count < 0) {
                                 LogLineParseError($"Reactant count must be positive, got '{count}'", core.Substring(0, idx));
                                 continue;
                             } else if (count > 8) {

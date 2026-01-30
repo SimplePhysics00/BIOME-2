@@ -18,10 +18,14 @@ public sealed class Renderer : IDisposable {
 
 	private ShaderProgram _shader = null!;
 	private ShaderProgram _axisShader = null!;
+    private ShaderProgram? _highlightShader = null;
 
 	private VertexArrayObject _vao = null!;
 	private BufferObject _quadVbo = null!;
 	private BufferObject _instanceVbo = null!;
+	private VertexArrayObject? _highlightVao = null;
+	private BufferObject? _highlightQuadVbo = null;
+	private BufferObject? _highlightInstanceVbo = null;
 	private VertexArrayObject _axisVao = null!;
 	private BufferObject _axisVbo = null!;
 
@@ -34,6 +38,17 @@ public sealed class Renderer : IDisposable {
 	private int _uPixelsPerUnit;
 	private int _uGridThicknessPx;
 	private int _uCellColors;
+
+	// Highlight shader uniforms
+	private int _uHViewProj;
+	private int _uHCellSize;
+	private int _uHTime;
+	private int _uHPixelsPerUnit;
+	private int _uHBorderThicknessPx;
+	private int _uHDotFreq;
+	private int _uHColorA;
+	private int _uHColorB;
+	private int _uHAlpha;
 
 	// Controls for rendering options
 	public bool ShowGrid { get; set; } = false;
@@ -59,6 +74,65 @@ public sealed class Renderer : IDisposable {
 
 	public Renderer(float cellSize) {
 		_cellSize = cellSize;
+	}
+
+	// Draw highlight overlay based on input state (hover or zone). Call this from app after Render.
+	public void DrawHighlight(Camera camera, Input.InputState input) {
+		if (_highlightShader == null || _highlightVao == null || _highlightInstanceVbo == null)
+			return;
+
+		if (_world == null) return;
+
+		// Determine hover cell
+		var hover = input.GetHoverCell(camera, this);
+		int hoverX = hover.X;
+		int hoverY = hover.Y;
+
+		int instCount = 0;
+		float[] instanceData = Array.Empty<float>();
+
+		if (input.GetPlacementMode() == Input.InputState.PlacementMode.Pixel || !input.IsPlacing()) {
+			if (hoverX >= 0 && hoverX < _world.WidthCells && hoverY >= 0 && hoverY < _world.HeightCells) {
+				instCount = 1;
+				instanceData = new float[4] { hoverX * _cellSize, hoverY * _cellSize, 1.0f, 1.0f };
+			}
+		} else {
+			var start = input.GetPlacementStart();
+			int sx = start.X;
+			int sy = start.Y;
+			if (sx >= 0 && sy >= 0) {
+				int minX = Math.Min(sx, hoverX);
+				int maxX = Math.Max(sx, hoverX);
+				int minY = Math.Min(sy, hoverY);
+				int maxY = Math.Max(sy, hoverY);
+				int w = maxX - minX + 1;
+				int h = maxY - minY + 1;
+				instCount = 1;
+				instanceData = new float[4] { minX * _cellSize, minY * _cellSize, (float)w, (float)h };
+			}
+		}
+
+		if (instCount == 0) return;
+
+		// Upload instance data (vec4 per instance: origin.x, origin.y, size.x, size.y)
+		_highlightInstanceVbo.Bind();
+		_highlightInstanceVbo.SetData<float>(instanceData, BufferUsageHint.DynamicDraw);
+
+		_highlightShader!.Use();
+		_highlightVao!.Bind();
+
+		var viewProj = camera.GetViewProjection();
+		GL.UniformMatrix4(_uHViewProj, false, ref viewProj);
+		GL.Uniform1(_uHCellSize, _cellSize);
+		GL.Uniform1(_uHTime, (float)DateTime.Now.TimeOfDay.TotalSeconds);
+		GL.Uniform1(_uHPixelsPerUnit, camera.Zoom);
+		GL.Uniform1(_uHBorderThicknessPx, 2.0f);
+		GL.Uniform1(_uHDotFreq, 4.0f);
+		GL.Uniform3(_uHColorA, new OpenTK.Mathematics.Vector3(0f,0f,0f));
+		GL.Uniform3(_uHColorB, new OpenTK.Mathematics.Vector3(1f,1f,1f));
+		GL.Uniform1(_uHAlpha, 1.0f);
+
+		GL.DrawArraysInstanced(PrimitiveType.TriangleFan, 0, 4, instCount);
 	}
 
     // Expose cell size for UI placement calculations
@@ -108,6 +182,19 @@ public sealed class Renderer : IDisposable {
 		// Axis shader and buffers (lines from origin along +X and +Y)
 		_axisShader = new ShaderProgram(Shaders.AxisVertex, Shaders.AxisFragment);
 
+		// Highlight shader
+		_highlightShader = new ShaderProgram(Shaders.HighlightVertex, Shaders.HighlightFragment);
+
+		_uHViewProj = _highlightShader.GetUniformLocation("uViewProj");
+		_uHCellSize = _highlightShader.GetUniformLocation("uCellSize");
+		_uHTime = _highlightShader.GetUniformLocation("uTime");
+		_uHPixelsPerUnit = _highlightShader.GetUniformLocation("uPixelsPerUnit");
+		_uHBorderThicknessPx = _highlightShader.GetUniformLocation("uBorderThicknessPx");
+		_uHDotFreq = _highlightShader.GetUniformLocation("uDotFrequency");
+		_uHColorA = _highlightShader.GetUniformLocation("uColorA");
+		_uHColorB = _highlightShader.GetUniformLocation("uColorB");
+		_uHAlpha = _highlightShader.GetUniformLocation("uAlpha");
+
 		_axisVao = new VertexArrayObject();
 		_axisVao.Bind();
 
@@ -117,6 +204,21 @@ public sealed class Renderer : IDisposable {
 
 		GL.EnableVertexAttribArray(0);
 		GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, sizeof(float) * 2, 0);
+
+		// Setup highlight VAO (unit quad 0..1)
+		_highlightVao = new VertexArrayObject();
+		_highlightVao.Bind();
+		_highlightQuadVbo = new BufferObject(BufferTarget.ArrayBuffer);
+		_highlightQuadVbo.SetData<Vector2>([new Vector2(0,0), new Vector2(1,0), new Vector2(1,1), new Vector2(0,1)], BufferUsageHint.StaticDraw);
+		GL.EnableVertexAttribArray(0);
+		GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, sizeof(float) * 2, 0);
+
+		// Instance buffer: vec2 origin, ivec2 size -> we can send as vec4 (x,y,sizeX,sizeY)
+		_highlightInstanceVbo = new BufferObject(BufferTarget.ArrayBuffer);
+		_highlightInstanceVbo.Bind();
+		GL.EnableVertexAttribArray(1);
+		GL.VertexAttribPointer(1, 4, VertexAttribPointerType.Float, false, sizeof(float) * 4, 0);
+		GL.VertexAttribDivisor(1, 1);
 
 		Logger.Info("Renderer initialized.");
 	}

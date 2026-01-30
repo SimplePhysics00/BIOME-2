@@ -110,14 +110,14 @@ public sealed class ImGuiController : IDisposable
         SetPerFrameData();
     }
 
-    public void RenderUI(Renderer renderer, Simulation.SimulationController simulation, Graphics.Camera camera, Input.InputState input)
+    public void RenderUI(Renderer renderer, Simulation.SimulationController simulation, Input.InputState input)
     {
         // Start new frame
         SetPerFrameData();
         ImGui.NewFrame();
 
         // Render the toolbox window
-        _toolbox.Render(renderer, simulation, camera, input);
+        _toolbox.Render(renderer, simulation, input);
 
         ImGui.Render();
         var drawData = ImGui.GetDrawData();

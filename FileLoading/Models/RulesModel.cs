@@ -29,7 +29,7 @@ public class RulesModel {
     ) {
         LayerName = layerName ?? string.Empty;
         OriginSpeciesName = originSpeciesName ?? string.Empty;
-        Reactants = reactants ?? Array.Empty<ReactantModel>();
+        Reactants = reactants ?? [];
         NewSpeciesName = newSpeciesName ?? string.Empty;
         Probability = probability;
         VerboseRule = verboseRule ?? string.Empty;

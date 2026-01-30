@@ -1,4 +1,6 @@
-﻿namespace Biome2;
+﻿using Biome2.App;
+
+namespace Biome2;
 
 internal static class Program {
 	[STAThread]

@@ -19,9 +19,9 @@ public static class RulesValidator
             warnings.Add("There were no rules found!");
 			return warnings;
 		}
-        if (world == null) throw new ArgumentNullException(nameof(world));
+		ArgumentNullException.ThrowIfNull(world);
 
-        for (int i = 0; i < rules.Count; i++)
+		for (int i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
 

@@ -1,11 +1,13 @@
 using Biome2.Diagnostics;
 using Biome2.Simulation;
+using Biome2.World;
 using ImGuiNET;
 using System;
 using System.Globalization;
 using System.IO;
 using System.Numerics;
 using System.Windows.Forms;
+using static Biome2.Input.InputState;
 using static System.ComponentModel.Design.ObjectSelectorEditor;
 
 namespace Biome2.Graphics.UI;
@@ -15,6 +17,7 @@ internal sealed class ToolboxWindow
     private const string Title = "Toolbox";
 	private const string LoadRulesButtonLabel = "Load Rules";
 	private const string DebugRulesButtonLabel = "Debug Rules";
+	private const string RestartWorldButtonLabel = "Restart World";
 
 	// Stored delay values to avoid recalculating every frame. They are updated
 	// only when the user moves the slider.
@@ -27,6 +30,10 @@ internal sealed class ToolboxWindow
     private float _windowWidth;
     // Per-species selection for placement
     private bool[]? _selectedSpecies;
+    // Editable grid size fields (spinners)
+    private int _gridWidth = 0;
+    private int _gridHeight = 0;
+    private WorldState? _lastWorldRef = null;
 
     private static ImGuiWindowFlags GetWindowFlags()
     {
@@ -34,7 +41,7 @@ internal sealed class ToolboxWindow
             | ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoBringToFrontOnFocus;
     }
 
-    public void Render(Renderer renderer, SimulationController simulation, Graphics.Camera camera, Input.InputState input)
+    public void Render(Renderer renderer, SimulationController simulation, Input.InputState input)
     {
         // Force the UI to a fixed screen location and prevent it from being moved by dragging.
         // Use 0,0 so the UI is positioned at the top-left of the application viewport.
@@ -45,8 +52,19 @@ internal sealed class ToolboxWindow
 
         ImGui.Begin(Title, GetWindowFlags());
 
-        // Load Rules button (centered)
-        {
+		// ensure data is populated from the current loaded world
+		var world = simulation.World;
+		if (world != null) {
+			// If the world instance changed since last frame, update fields to match
+			if (!object.ReferenceEquals(_lastWorldRef, world)) {
+				_gridWidth = world.WidthCells;
+				_gridHeight = world.HeightCells;
+				_lastWorldRef = world;
+			}
+		}
+
+		// Load Rules button (centered)
+		{
             var textSize = ImGui.CalcTextSize(LoadRulesButtonLabel);
             var framePadding = ImGui.GetStyle().FramePadding;
             var buttonWidth = textSize.X + framePadding.X * 2.0f;
@@ -87,15 +105,15 @@ internal sealed class ToolboxWindow
             }
 		}
 
-        // Pause toggle
-        bool paused = simulation.Clock.Paused;
+		// Pause toggle
+		bool paused = simulation.Clock.Paused;
         if (ImGui.Checkbox("Paused", ref paused)) {
             simulation.Clock.Paused = paused;
         }
 
 		// Delay time slider: use a nonlinear curve so mid slider values yield small millisecond delays.
 		// Mapping: DelayTime (seconds) = slider^expo * 1.0 (max 1s). Inverse used to position the slider.
-		const int expo = 4;
+		const int DelaySliderExponent = 4;
         string tickDelayText;
         if (CurrentDelay > 0.0f && DelayMs < 1)
             tickDelayText = $"Tick Delay: ~{DelayMs} ms";
@@ -110,7 +128,7 @@ internal sealed class ToolboxWindow
 		if (ImGui.SliderFloat("##TickDelayTime", ref sliderPos, 0.0f, 1.0f)) {
 			// store new slider position
 			DelaySliderPos = sliderPos;
-			float newDelay = MathF.Pow(Math.Clamp(sliderPos, 0.0f, 1.0f), expo);
+			float newDelay = MathF.Pow(Math.Clamp(sliderPos, 0.0f, 1.0f), DelaySliderExponent);
 			simulation.Clock.DelayTime = newDelay;
 			CurrentDelay = newDelay;
 			DelayMs = (int) Math.Round(CurrentDelay * 1000.0f);
@@ -137,8 +155,32 @@ internal sealed class ToolboxWindow
 
 		ImGui.Separator();
 
+		// Two input spinners for width and height
+		ImGui.PushItemWidth(120);
+		ImGui.InputInt("Width", ref _gridWidth, 1, 10);
+		ImGui.InputInt("Height", ref _gridHeight, 1, 10);
+		ImGui.PopItemWidth();
+
+		// Restart World button (centered)
+		{
+			var textSize = ImGui.CalcTextSize(RestartWorldButtonLabel);
+			var framePadding = ImGui.GetStyle().FramePadding;
+			var buttonWidth = textSize.X + framePadding.X * 2.0f;
+			ImGui.SetCursorPosX((_windowWidth - buttonWidth) * 0.5f);
+		}
+		if (ImGui.Button(RestartWorldButtonLabel)) {
+			try {
+				int w = Math.Max(1, _gridWidth);
+				int h = Math.Max(1, _gridHeight);
+				simulation.RestartWorld(w, h);
+			} catch (Exception ex) {
+				Logger.Error($"Failed to restart world: {ex.Message}");
+			}
+		}
+
+		ImGui.Separator();
+
 		// Layer selection (radio buttons) - reflect and set the world's active layer
-		var world = simulation.World;
 		if (world != null) {
 			ImGui.Text("Active Layer:");
 			int activeIdx = world.ActiveLayerIndex;
@@ -154,8 +196,20 @@ internal sealed class ToolboxWindow
 
         ImGui.Separator();
 
-        // Species selection: list species with checkboxes to enable manual placement
-        if (world != null) {
+		ImGui.Text("Paint Mode:");
+
+		// Paint mode radio buttons (Pixel / Zone)
+		int paintMode = (int)input.GetPlacementMode();
+		if (ImGui.RadioButton("Pixel##paintmode", ref paintMode, (int)PlacementMode.Pixel)) {
+			input.SetPlacementMode(PlacementMode.Pixel);
+		}
+		ImGui.SameLine();
+		if (ImGui.RadioButton("Zone##paintmode", ref paintMode, (int)PlacementMode.Zone)) {
+			input.SetPlacementMode(PlacementMode.Zone);
+		}
+
+		// Species selection: list species with checkboxes to enable manual placement
+		if (world != null) {
             ImGui.Text("Species:");
             int speciesCount = world.Species.Count;
             // Maintain a static selection array per-window
@@ -180,7 +234,7 @@ internal sealed class ToolboxWindow
 					selected.Add(si);
 
 			if (selected.Count > 0) {
-				input.SetSelectedSpeciesIndices(selected.ToArray());
+				input.SetSelectedSpeciesIndices([.. selected]);
 			}
         }
 

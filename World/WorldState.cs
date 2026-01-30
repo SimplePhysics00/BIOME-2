@@ -41,108 +41,9 @@ public sealed class WorldState {
     // Current selected species indices for UI brush. Snapshot read by simulation when applying placement requests.
     private int[] _selectedSpeciesIndices = Array.Empty<int>();
 
-    /// <summary>
-    /// Set the current selected species indices used by placement requests.
-    /// This is a cheap copy operation; callers (UI) should update when selection changes.
-    /// </summary>
-    public void SetSelectedSpeciesIndices(int[] indices) {
-        _selectedSpeciesIndices = indices ?? Array.Empty<int>();
-    }
-
-    /// <summary>
-    /// Enqueue a lightweight placement request (no species chosen yet). The simulation will pick
-    /// a species from the selected species snapshot when applying requests.
-    /// </summary>
-    public void EnqueuePlacementRequest(int layerIndex, int x, int y) {
-        if (layerIndex < 0 || layerIndex >= _layers.Count) return;
-        var grid = _layers[layerIndex].Grid;
-        if (x < 0 || x >= grid.Width || y < 0 || y >= grid.Height) return;
-        lock (_pendingLock) {
-            _placementRequests.Add((layerIndex, x, y));
-        }
-    }
-
-    /// <summary>
-    /// Apply any pending placements into the NEXT buffers. Caller must hold the simulation step lock.
-    /// This ensures placements are considered by the upcoming swap and next tick.
-    /// </summary>
-    public void ApplyPendingPlacements() {
-        (int Layer, int X, int Y, byte Species)[] explicitSnapshot;
-        (int Layer, int X, int Y)[] requestSnapshot;
-
-        explicitSnapshot = _pendingPlacements.ToArray();
-        _pendingPlacements.Clear();
-
-        requestSnapshot = _placementRequests.ToArray();
-        _placementRequests.Clear();
-
-        // Resolve lightweight requests into concrete placements using a snapshot of selected indices.
-        int[] selectedSnapshot = _selectedSpeciesIndices.Length == 0 ? Array.Empty<int>() : (int[])_selectedSpeciesIndices.Clone();
-        var rnd = Random.Shared;
-        var resolved = new List<(int Layer, int X, int Y, byte Species)>();
-
-        if (requestSnapshot.Length > 0 && selectedSnapshot.Length > 0) {
-            foreach (var r in requestSnapshot) {
-                int choice = selectedSnapshot[rnd.Next(selectedSnapshot.Length)];
-                resolved.Add((r.Layer, r.X, r.Y, (byte)choice));
-            }
-        }
-
-        // Combine explicit placements and resolved requests
-        var all = new List<(int Layer, int X, int Y, byte Species)>();
-        if (explicitSnapshot.Length > 0) all.AddRange(explicitSnapshot);
-        if (resolved.Count > 0) all.AddRange(resolved);
-
-        if (all.Count == 0) return;
-
-        // Group by layer to minimize CopyCurrentToNext calls
-        var byLayer = all.GroupBy(p => p.Layer);
-        foreach (var g in byLayer) {
-            int li = g.Key;
-            if (li < 0 || li >= _layers.Count) continue;
-            var grid = _layers[li].Grid;
-            // Ensure next buffer prepared
-            grid.CopyCurrentToNext();
-            foreach (var p in g) {
-                grid.SetNext(p.X, p.Y, p.Species);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Immediately set both CURRENT and NEXT buffers for instant visual feedback.
-    /// Caller should hold appropriate locks if stepping concurrently.
-    /// </summary>
-    public void PlaceImmediate(int layerIndex, int x, int y, byte speciesValue) {
-        if (layerIndex < 0 || layerIndex >= _layers.Count) return;
-        var grid = _layers[layerIndex].Grid;
-        if (x < 0 || x >= grid.Width || y < 0 || y >= grid.Height) return;
-        lock (_pendingLock) {
-            // Ensure both buffers are consistent then write
-            grid.CopyCurrentToNext();
-            grid.SetNext(x, y, speciesValue);
-            grid.SetCurrent(x, y, speciesValue);
-            // Also enqueue so the placement is reapplied after rules processing to avoid overwrites
-            _pendingPlacements.Add((layerIndex, x, y, speciesValue));
-        }
-    }
-
-    /// <summary>
-    /// Place a species value into the specified layer's NEXT buffer at (x,y).
-    /// This does not swap buffers; caller is responsible for synchronization and when buffers are swapped.
-    /// </summary>
-    public void PlaceSpeciesNext(int layerIndex, int x, int y, byte speciesValue) {
-        if (layerIndex < 0 || layerIndex >= _layers.Count) return;
-        var grid = _layers[layerIndex].Grid;
-        if (x < 0 || x >= grid.Width || y < 0 || y >= grid.Height) return;
-        // Ensure next buffer exists and is a copy of current so single-cell write is safe
-        grid.CopyCurrentToNext();
-        grid.SetNext(x, y, speciesValue);
-    }
-
 	// Species registry for this world. Each species index maps directly to the byte value
 	// stored in CellGrid cells. The renderer will query this model for RGBA bytes.
-	private List<SpeciesModel> _species = new();
+	private List<SpeciesModel> _species = [];
 	public IReadOnlyList<SpeciesModel> Species => _species;
 
     // Flattened RGBA8 palette (4 bytes per species) rebuilt when species list changes.
@@ -198,8 +99,8 @@ public sealed class WorldState {
 	/// Rebuilds an internal flattened RGBA8 palette for fast lookups by renderer.
 	/// </summary>
 	public void SetSpeciesList(IEnumerable<SpeciesModel> species) {
-		if (species is null) throw new ArgumentNullException(nameof(species));
-		_species = species.ToList();
+		ArgumentNullException.ThrowIfNull(species);
+		_species = [.. species];
 		BuildSpeciesPalette();
 	}
 
@@ -252,8 +153,8 @@ public sealed class WorldState {
 
 	private void BuildSpeciesPalette() {
 		if (_species.Count == 0) {
-			_speciesPalette = Array.Empty<byte>();
-			SpeciesPaletteChanged?.Invoke(Array.Empty<byte>());
+			_speciesPalette = [];
+			SpeciesPaletteChanged?.Invoke([]);
 			return;
 		}
 
@@ -279,5 +180,115 @@ public sealed class WorldState {
 		// Publish new flattened palette for subscribers (e.g., renderer).
 		// Invoke with a cloned copy so subscribers cannot mutate internal state.
 		SpeciesPaletteChanged?.Invoke(GetSpeciesPalette());
+	}
+
+	/// <summary>
+	/// Set the current selected species indices used by placement requests.
+	/// This is a cheap copy operation; callers (UI) should update when selection changes.
+	/// </summary>
+	public void SetSelectedSpeciesIndices(int[] indices) {
+		_selectedSpeciesIndices = indices ?? [];
+	}
+
+	/// <summary>
+	/// Enqueue a lightweight placement request (no species chosen yet). The simulation will pick
+	/// a species from the selected species snapshot when applying requests.
+	/// </summary>
+	public void EnqueuePlacementRequest(int x, int y) {
+		var layerIndex = ActiveLayerIndex;
+		if (layerIndex < 0 || layerIndex >= _layers.Count)
+			return;
+		var grid = _layers[layerIndex].Grid;
+		if (x < 0 || x >= grid.Width || y < 0 || y >= grid.Height)
+			return;
+		lock (_pendingLock) {
+			_placementRequests.Add((layerIndex, x, y));
+		}
+	}
+
+	/// <summary>
+	/// Apply any pending placements into the NEXT buffers. Caller must hold the simulation step lock.
+	/// This ensures placements are considered by the upcoming swap and next tick.
+	/// </summary>
+	public void ApplyPendingPlacements() {
+		(int Layer, int X, int Y, byte Species)[] explicitSnapshot;
+		(int Layer, int X, int Y)[] requestSnapshot;
+
+		explicitSnapshot = [.. _pendingPlacements];
+		_pendingPlacements.Clear();
+
+		requestSnapshot = [.. _placementRequests];
+		_placementRequests.Clear();
+
+		// Resolve lightweight requests into concrete placements using a snapshot of selected indices.
+		int[] selectedSnapshot = _selectedSpeciesIndices.Length == 0 ? [] : (int[]) _selectedSpeciesIndices.Clone();
+		var rnd = Random.Shared;
+		var resolved = new List<(int Layer, int X, int Y, byte Species)>();
+
+		if (requestSnapshot.Length > 0 && selectedSnapshot.Length > 0) {
+			foreach (var (Layer, X, Y) in requestSnapshot) {
+				int choice = selectedSnapshot[rnd.Next(selectedSnapshot.Length)];
+				resolved.Add((Layer, X, Y, (byte) choice));
+			}
+		}
+
+		// Combine explicit placements and resolved requests
+		var all = new List<(int Layer, int X, int Y, byte Species)>();
+		if (explicitSnapshot.Length > 0)
+			all.AddRange(explicitSnapshot);
+		if (resolved.Count > 0)
+			all.AddRange(resolved);
+
+		if (all.Count == 0)
+			return;
+
+		// Group by layer to minimize CopyCurrentToNext calls
+		var byLayer = all.GroupBy(p => p.Layer);
+		foreach (var g in byLayer) {
+			int li = g.Key;
+			if (li < 0 || li >= _layers.Count)
+				continue;
+			var grid = _layers[li].Grid;
+			// Ensure next buffer prepared
+			grid.CopyCurrentToNext();
+			foreach (var p in g) {
+				grid.SetNext(p.X, p.Y, p.Species);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Immediately set both CURRENT and NEXT buffers for instant visual feedback.
+	/// Caller should hold appropriate locks if stepping concurrently.
+	/// </summary>
+	public void PlaceImmediate(int layerIndex, int x, int y, byte speciesValue) {
+		if (layerIndex < 0 || layerIndex >= _layers.Count)
+			return;
+		var grid = _layers[layerIndex].Grid;
+		if (x < 0 || x >= grid.Width || y < 0 || y >= grid.Height)
+			return;
+		lock (_pendingLock) {
+			// Ensure both buffers are consistent then write
+			grid.CopyCurrentToNext();
+			grid.SetNext(x, y, speciesValue);
+			grid.SetCurrent(x, y, speciesValue);
+			// Also enqueue so the placement is reapplied after rules processing to avoid overwrites
+			_pendingPlacements.Add((layerIndex, x, y, speciesValue));
+		}
+	}
+
+	/// <summary>
+	/// Place a species value into the specified layer's NEXT buffer at (x,y).
+	/// This does not swap buffers; caller is responsible for synchronization and when buffers are swapped.
+	/// </summary>
+	public void PlaceSpeciesNext(int layerIndex, int x, int y, byte speciesValue) {
+		if (layerIndex < 0 || layerIndex >= _layers.Count)
+			return;
+		var grid = _layers[layerIndex].Grid;
+		if (x < 0 || x >= grid.Width || y < 0 || y >= grid.Height)
+			return;
+		// Ensure next buffer exists and is a copy of current so single-cell write is safe
+		grid.CopyCurrentToNext();
+		grid.SetNext(x, y, speciesValue);
 	}
 }
