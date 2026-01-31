@@ -17,6 +17,11 @@ public sealed class SimulationController : IDisposable {
     private WorldState _world;
 	public WorldState World => _world;
 
+    // Optional path of the last loaded rules file. UI sets this when a file is loaded.
+    public string? LastLoadedRulesFilePath { get; set; }
+
+    private readonly Performance _perf;
+
 	private readonly object _stepLock = new();
 
     // Background stepping
@@ -114,18 +119,19 @@ public sealed class SimulationController : IDisposable {
         _world.EnqueuePlacementRequest(x, y);
     }
 
-    public SimulationController(WorldState world) {
+    public SimulationController(WorldState world, Performance perf) {
         _world = world;
+        _perf = perf ?? throw new ArgumentNullException(nameof(perf));
 
-		// Start paused, since we have no rules yet.
-		Clock.Paused = true;
+        // Start paused, since we have no rules yet.
+        Clock.Paused = true;
 
-		// Start background stepping so simulation can run as fast as possible independent of render.
-		_cts = new CancellationTokenSource();
-		_bgTask = Task.Run(() => BackgroundLoop(_cts.Token));
+        // Start background stepping so simulation can run as fast as possible independent of render.
+        _cts = new CancellationTokenSource();
+        _bgTask = Task.Run(() => BackgroundLoop(_cts.Token));
 
-		// TODO: create default species and rules for Conway's Game of Life
-	}
+        // TODO: create default species and rules for Conway's Game of Life
+    }
 
 	public void Dispose() {
 		if (_cts != null) {
@@ -293,6 +299,15 @@ public sealed class SimulationController : IDisposable {
 		foreach (var layer in _world.Layers) {
 			layer.Grid.SwapBuffers();
 		}
+
+        // Record that a tick occurred for TPS tracking, but only after a rules file
+        // has been loaded. This avoids skewing the max TPS from warmup/background activity
+        // before a file is in use.
+        try {
+            if (!string.IsNullOrEmpty(LastLoadedRulesFilePath)) {
+                _perf?.RecordTick();
+            }
+        } catch { }
 	}
 
 	private bool CheckAllReactantsMatch(WorldLayer layer, int y, int x, Models.SimulationRuleModel rule) {

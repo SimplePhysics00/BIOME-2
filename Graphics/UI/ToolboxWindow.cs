@@ -106,6 +106,9 @@ internal sealed class ToolboxWindow
 
                     // Apply to simulation controller via new ApplyRules API
                     simulation.ApplyRules(request);
+                    try {
+                        simulation.LastLoadedRulesFilePath = selected;
+                    } catch { }
                 }
             } catch (Exception ex) {
                 Logger.Error($"Failed to load rules file: {ex.Message}");

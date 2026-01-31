@@ -50,7 +50,7 @@ public sealed class BiomeApp : GameWindow {
 
         _world = WorldState.CreateBlank();
 
-        _simulation = new SimulationController(_world);
+        _simulation = new SimulationController(_world, _perf);
 
 		// Listen for world replacement so subsystems (renderer, camera) can update.
 		_simulation.WorldReplaced += OnWorldReplaced;
@@ -135,6 +135,11 @@ public sealed class BiomeApp : GameWindow {
 			_renderer.Dispose();
 			_simulation.Dispose();
 		}
+
+        // Persist TPS stats
+        try {
+            _perf.SaveMaxTps(_simulation?.LastLoadedRulesFilePath);
+        } catch { }
 		Logger.Info("App unloaded.");
 	}
 }
