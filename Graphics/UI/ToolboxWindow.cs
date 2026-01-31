@@ -37,8 +37,9 @@ internal sealed class ToolboxWindow
 
     private static ImGuiWindowFlags GetWindowFlags()
     {
-        return ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoSavedSettings
-            | ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoBringToFrontOnFocus;
+        return ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoCollapse
+			| ImGuiWindowFlags.NoSavedSettings
+			| ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoBringToFrontOnFocus;
     }
 
     public void Render(Renderer renderer, SimulationController simulation, Input.InputState input)
@@ -50,7 +51,13 @@ internal sealed class ToolboxWindow
         // AlwaysAutoResize will size to content, but enforce size constraints
         ImGui.SetNextWindowSizeConstraints(new Vector2(260, 90), new Vector2(float.MaxValue, float.MaxValue), null);
 
-        ImGui.Begin(Title, GetWindowFlags());
+		var style = ImGui.GetStyle();
+		var primaryColor = style.Colors[(int) ImGuiCol.TitleBgActive];
+		// Force unfocused/collapsed title to use the same blue as the active title
+		ImGui.PushStyleColor(ImGuiCol.TitleBg, primaryColor);
+		ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, primaryColor);
+		ImGui.Begin(Title, GetWindowFlags());
+		ImGui.PopStyleColor(2);
 
 		// ensure data is populated from the current loaded world
 		var world = simulation.World;
@@ -95,7 +102,7 @@ internal sealed class ToolboxWindow
 
                 if (!string.IsNullOrEmpty(selected) && File.Exists(selected)) {
                     var loader = new FileLoading.RulesLoader();
-                    var request = loader.Load(selected);
+                    var request = FileLoading.RulesLoader.Load(selected);
 
                     // Apply to simulation controller via new ApplyRules API
                     simulation.ApplyRules(request);
@@ -137,7 +144,18 @@ internal sealed class ToolboxWindow
 
 		ImGui.Separator();
 
-		ImGui.BeginChild("##ScrollableArea", new Vector2(-1, 430));
+        // Compute a dynamic child height. Using GetContentRegionAvail() alone can be
+        // misleading when the window is AlwaysAutoResize, so base the available
+        // vertical space on the display size and window position so the child can
+        // expand when the app has more screen real-estate (e.g., fullscreen/4k).
+        var io = ImGui.GetIO();
+        var winPos = ImGui.GetWindowPos();
+        // Reserve some pixels at the bottom of the display and for controls below the child
+        float screenBottomMargin = 20.0f;
+        float reservedBelow = 255.0f; // space to leave for bottom controls inside the window
+        float screenAvailBelow = Math.Max(reservedBelow, io.DisplaySize.Y - winPos.Y - screenBottomMargin);
+        float childHeight = Math.Max(reservedBelow, screenAvailBelow - reservedBelow);
+        ImGui.BeginChild("##ScrollableArea", new Vector2(-1, childHeight));
 
 		// ShowGrid toggle
 		bool showGrid = renderer.ShowGrid;

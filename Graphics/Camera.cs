@@ -7,9 +7,9 @@ namespace Biome2.Graphics;
 /// Simple 2D camera that supports pan and zoom.
 /// World coordinates are in float units, independent of cells.
 /// </summary>
-public sealed class Camera {
-	public int ViewportWidth { get; private set; }
-	public int ViewportHeight { get; private set; }
+public sealed class Camera(int viewportWidth, int viewportHeight) {
+	public int ViewportWidth { get; private set; } = viewportWidth;
+	public int ViewportHeight { get; private set; } = viewportHeight;
 
 	public Vector2 Position { get; private set; } = Vector2.Zero;
 	public float Zoom { get; private set; } = 1.0f;
@@ -19,11 +19,6 @@ public sealed class Camera {
 	//private const float MinFarnessZoomFactor = 1.0f;
 	private const float MaxClosenessZoomFactor = 300.0f;
 	private const float ZoomScrollWheelFactor = 0.2f;
-
-	public Camera(int viewportWidth, int viewportHeight) {
-		ViewportWidth = viewportWidth;
-		ViewportHeight = viewportHeight;
-	}
 
 	public void Resize(int width, int height) {
 		ViewportWidth = width;

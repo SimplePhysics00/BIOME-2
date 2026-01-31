@@ -28,8 +28,8 @@ public sealed class SimulationController : IDisposable {
     public event Action<WorldState>? WorldReplaced;
 
     // Loaded rules for the simulation. Populated by ApplyRules.
-    private List<Models.SimulationRule> _rules = new();
-    public IReadOnlyList<Models.SimulationRule> Rules => _rules;
+    private List<Models.SimulationRuleModel> _rules = [];
+    public IReadOnlyList<Models.SimulationRuleModel> Rules => _rules;
 
     // Last applied WorldModel request (from file). Used to restart the world to its initial state.
     private WorldModel? _lastWorldModel;
@@ -38,9 +38,9 @@ public sealed class SimulationController : IDisposable {
     private EdgeMode _edgeMode = EdgeMode.BORDER;
 
     // Indexed rules: key = (layerIndex, originSpeciesIndex)
-    private Dictionary<(int layer, int origin), List<Models.SimulationRule>> _ruleIndex = new();
+    private Dictionary<(int layer, int origin), List<Models.SimulationRuleModel>> _ruleIndex = [];
     // Layers that have any rules (for quick skipping)
-    private HashSet<int> _layersWithRules = new();
+    private HashSet<int> _layersWithRules = [];
 
     public SimulationClock Clock { get; } = new();
 
@@ -81,10 +81,10 @@ public sealed class SimulationController : IDisposable {
         lock (_stepLock)
         {
             _world = newWorld;
-            _rules = new List<Models.SimulationRule>();
+            _rules = [];
             _edgeMode = EdgeMode.BORDER;
-            _ruleIndex = new Dictionary<(int layer, int origin), List<Models.SimulationRule>>();
-            _layersWithRules = new HashSet<int>();
+            _ruleIndex = [];
+            _layersWithRules = [];
         }
 
         try
@@ -264,11 +264,8 @@ public sealed class SimulationController : IDisposable {
 				int x = idx % grid.Width;
 				byte originValue = grid.GetCurrent(x, y);
 
-				//bool appliedThisLayer = false;
 				if (_ruleIndex.TryGetValue((layerIndex, originValue), out var candidates)) {
 					foreach (var rule in candidates) {
-						//if (appliedThisLayer)
-							//break;
 
 						bool allReactantsMatch = CheckAllReactantsMatch(layer, y, x, rule);
 						if (allReactantsMatch) {
@@ -282,8 +279,6 @@ public sealed class SimulationController : IDisposable {
 									}
 
 									rule.IncrementOpCount();
-									//appliedThisLayer = true;
-									//break;
 								}
 							}
 						}
@@ -300,7 +295,7 @@ public sealed class SimulationController : IDisposable {
 		}
 	}
 
-	private bool CheckAllReactantsMatch(WorldLayer layer, int y, int x, Models.SimulationRule rule) {
+	private bool CheckAllReactantsMatch(WorldLayer layer, int y, int x, Models.SimulationRuleModel rule) {
 		bool allReactantsMatch = true;
 
         // Allocate neighbor index buffer once to avoid repeated stackalloc inside the loop (CA2014)

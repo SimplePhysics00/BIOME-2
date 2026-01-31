@@ -34,8 +34,9 @@ public sealed class CellGrid {
 
 	public void FillWith(byte[] allowedValues) {
 		// fills the buffers with a random array of values from the allowed list
-		if (allowedValues is null) throw new ArgumentNullException(nameof(allowedValues));
-		if (allowedValues.Length == 0) throw new ArgumentException("allowedValues must contain at least one value", nameof(allowedValues));
+		ArgumentNullException.ThrowIfNull(allowedValues);
+		if (allowedValues.Length == 0)
+			throw new ArgumentException("allowedValues must contain at least one value", nameof(allowedValues));
 
 		var rand = Random.Shared;
 		int len = Width * Height;

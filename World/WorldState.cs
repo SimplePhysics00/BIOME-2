@@ -20,10 +20,10 @@ public sealed class WorldState {
 	public int HeightCells { get; }
 	public int LayerCount { get; }
 
-	private readonly List<WorldLayer> _layers = new();
+	private readonly List<WorldLayer> _layers = [];
 	public IReadOnlyList<WorldLayer> Layers => _layers;
 
-	public IReadOnlyList<string> LayerNames => _layers.Select(l => l.Name).ToList();
+	public IReadOnlyList<string> LayerNames => [.. _layers.Select(l => l.Name)];
 
 	// Layer viewing can swap which layer is currently visible.
 	public int ActiveLayerIndex { get; set; } = 0;
@@ -39,7 +39,7 @@ public sealed class WorldState {
     private readonly object _pendingLock = new object();
 
     // Current selected species indices for UI brush. Snapshot read by simulation when applying placement requests.
-    private int[] _selectedSpeciesIndices = Array.Empty<int>();
+    private int[] _selectedSpeciesIndices = [];
 
 	// Species registry for this world. Each species index maps directly to the byte value
 	// stored in CellGrid cells. The renderer will query this model for RGBA bytes.
@@ -47,7 +47,7 @@ public sealed class WorldState {
 	public IReadOnlyList<SpeciesModel> Species => _species;
 
     // Flattened RGBA8 palette (4 bytes per species) rebuilt when species list changes.
-    private byte[] _speciesPalette = Array.Empty<byte>();
+    private byte[] _speciesPalette = [];
 
     // Event raised when the flattened RGBA8 palette changes. The payload is a
     // byte[] with length = (speciesCount * 4) in RGBA order. If no species are

@@ -142,13 +142,14 @@ public sealed class ImGuiController : IDisposable
                         var io = ImGui.GetIO();
                         // Position at bottom-right using pivot (1,1)
                         //ImGui.SetNextWindowBgAlpha(0.06f);
-                        ImGui.SetNextWindowPos(new System.Numerics.Vector2(io.DisplaySize.X - 8f, io.DisplaySize.Y - 8f), ImGuiCond.Always, new System.Numerics.Vector2(1f, 1f));
+                        ImGui.SetNextWindowPos(new System.Numerics.Vector2(io.DisplaySize.X - 10f, io.DisplaySize.Y - 10f), ImGuiCond.Always, new System.Numerics.Vector2(1f, 1f));
                         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(6f, 4f));
                         var flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoSavedSettings
                                     | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoInputs
                                     | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoBackground;
                         ImGui.SetNextWindowBgAlpha(0.0f);
                         ImGui.Begin("##hover_overlay", flags);
+                        ImGui.SetWindowFontScale(1.5f);
                         ImGui.Text(name);
                         ImGui.End();
                         ImGui.PopStyleVar();

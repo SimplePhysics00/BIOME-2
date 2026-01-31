@@ -11,7 +11,7 @@ namespace Biome2.FileLoading;
 /// The UI will call into this service later (open file dialog, recent files, drag drop).
 /// </summary>
 public sealed class RulesLoader {
-    public WorldModel Load(string path) {
+    public static WorldModel Load(string path) {
         if (string.IsNullOrEmpty(path))
             throw new ArgumentNullException(nameof(path));
 
@@ -49,7 +49,7 @@ public sealed class RulesLoader {
             // strip comments
             var semi = line.IndexOf(';');
             if (semi >= 0)
-                line = line.Substring(0, semi);
+                line = line[..semi];
 
             var readLine = line.Trim();
 
@@ -61,8 +61,8 @@ public sealed class RulesLoader {
                 // settings like "WIDTH = 150"
                 var eq = readLine.IndexOf('=');
                 if (eq > 0) {
-                    var k = readLine.Substring(0, eq).Trim();
-                    var v = readLine.Substring(eq + 1).Trim();
+                    var k = readLine[..eq].Trim();
+                    var v = readLine[(eq + 1)..].Trim();
                     settings[k] = v;
                 } else {
                     LogLineParseError("Invalid setting (missing '=')", readLine);
@@ -74,8 +74,8 @@ public sealed class RulesLoader {
                     LogLineParseError("Invalid species definition (missing '=')", readLine);
                     continue;
                 }
-                var name = readLine.Substring(0, eq).Trim();
-                var rest = readLine.Substring(eq + 1).Trim();
+                var name = readLine[..eq].Trim();
+                var rest = readLine[(eq + 1)..].Trim();
 
                 // find braces
                 var l = rest.IndexOf('{');
@@ -83,7 +83,7 @@ public sealed class RulesLoader {
                 if (l >= 0 && r > l) {
                     var content = rest.Substring(l + 1, r - l - 1);
                     var parts = content.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                    byte[] col = new byte[4] { 0, 0, 0, 255 };
+                    byte[] col = [0, 0, 0, 255];
                     for (int j = 0; j < Math.Min(parts.Length, 4); j++) {
                         if (byte.TryParse(parts[j], out var b))
                             col[j] = b;
@@ -108,16 +108,16 @@ public sealed class RulesLoader {
                 // Example: FOREST:OLD + 1FIRE2+ -> FIRE1*0.1
                 var arrow = readLine.IndexOf("->", StringComparison.Ordinal);
                 if (arrow <= 0) { LogLineParseError("Invalid rule (missing '->')", readLine); continue; }
-                var left = readLine.Substring(0, arrow).Trim();
-                var right = readLine.Substring(arrow + 2).Trim();
+                var left = readLine[..arrow].Trim();
+                var right = readLine[(arrow + 2)..].Trim();
 
                 // left: layer:origin [reactants]
                 var colon = left.IndexOf(':');
                 string layerName;
                 string remainder;
                 if (colon > 0) {
-                    layerName = left.Substring(0, colon).Trim();
-                    remainder = left.Substring(colon + 1).Trim();
+                    layerName = left[..colon].Trim();
+                    remainder = left[(colon + 1)..].Trim();
 
                 } else {
                     // No explicit layer provided. Use the first defined layer if available.
@@ -153,8 +153,8 @@ public sealed class RulesLoader {
 
                         // determine sign from trailing + or -
                         int sign = 0;
-                        if (tok.EndsWith("+")) sign = 1;
-                        else if (tok.EndsWith("-")) sign = -1;
+                        if (tok.EndsWith('+')) sign = 1;
+                        else if (tok.EndsWith('-')) sign = -1;
 
                         var core = tok.TrimEnd('+', '-');
 
@@ -164,27 +164,27 @@ public sealed class RulesLoader {
 
                         int count = 0; // default: no count specified
                         if (idx > 0) {
-                            if (!int.TryParse(core.Substring(0, idx), out count)) {
-                                LogLineParseError($"Invalid reactant count '{core.Substring(0, idx)}'", core.Substring(0, idx));
+                            if (!int.TryParse(core.AsSpan(0, idx), out count)) {
+                                LogLineParseError($"Invalid reactant count '{core[..idx]}'", core[..idx]);
                                 continue;
                             }
                             // validate count
                             if (count < 0) {
-                                LogLineParseError($"Reactant count must be positive, got '{count}'", core.Substring(0, idx));
+                                LogLineParseError($"Reactant count must be positive, got '{count}'", core[..idx]);
                                 continue;
                             } else if (count > 8) {
-                                LogLineParseError($"Reactant count too large for given RANGE, got '{count}'", core.Substring(0, idx)); // TODO: RANGE setting
+                                LogLineParseError($"Reactant count too large for given RANGE, got '{count}'", core[..idx]); // TODO: RANGE setting
                             }
                         }
 
                         // species part may include an explicit layer like LAYER:SPECIES
-                        var speciesPart = core.Substring(idx);
+                        var speciesPart = core[idx..];
                         string reactLayer = string.Empty;
                         string speciesName = speciesPart;
-                        var cpos = speciesPart.IndexOf(':');
-                        if (cpos >= 0) {
-                            reactLayer = speciesPart.Substring(0, cpos);
-                            speciesName = speciesPart.Substring(cpos + 1);
+                        var colonPos = speciesPart.IndexOf(':');
+                        if (colonPos >= 0) {
+                            reactLayer = speciesPart[..colonPos];
+                            speciesName = speciesPart[(colonPos + 1)..];
                         }
 
                         if (string.IsNullOrEmpty(speciesName)) {
@@ -194,7 +194,7 @@ public sealed class RulesLoader {
 
                         list.Add(new ReactantModel(speciesName, reactLayer, count, sign));
                     }
-                    reactants = list.ToArray();
+                    reactants = [.. list];
                 }
 
                 // right side: newSpecies * probability
@@ -202,8 +202,8 @@ public sealed class RulesLoader {
                 var newSpec = right;
                 var star = right.IndexOf('*');
                 if (star >= 0) {
-                    newSpec = right.Substring(0, star).Trim();
-                    var probStr = right.Substring(star + 1).Trim();
+                    newSpec = right[..star].Trim();
+                    var probStr = right[(star + 1)..].Trim();
                     if (!double.TryParse(probStr, out prob)) {
                         LogLineParseError($"Invalid probability '{probStr}'", probStr);
                         prob = 1.0;
@@ -219,9 +219,9 @@ public sealed class RulesLoader {
         bool paused = false;
         var edgesMode = EdgeMode.BORDER;
         if (settings.TryGetValue("WIDTH", out var ws))
-            int.TryParse(ws, out w);
+			_=int.TryParse(ws, out w);
         if (settings.TryGetValue("HEIGHT", out var hs))
-            int.TryParse(hs, out h);
+			_=int.TryParse(hs, out h);
         if (settings.TryGetValue("PAUSE", out var ps))
             paused = ps != "0";
         if (settings.TryGetValue("EDGES", out var es)) {

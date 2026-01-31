@@ -11,12 +11,12 @@ namespace Biome2.Simulation;
 /// Returns warnings encountered during conversion.
 /// </summary>
 public static class RuleSetBuilder {
-    public static (List<SimulationRule> rules, Dictionary<(int layer, int origin), List<SimulationRule>> index, HashSet<int> layersWithRules)
+    public static (List<SimulationRuleModel> rules, Dictionary<(int layer, int origin), List<SimulationRuleModel>> index, HashSet<int> layersWithRules)
         Build(IReadOnlyList<RulesModel> fileRules, WorldState world)
     {
         var warnings = new List<string>();
-        var simRules = new List<SimulationRule>();
-        var index = new Dictionary<(int layer, int origin), List<SimulationRule>>();
+        var simRules = new List<SimulationRuleModel>();
+        var index = new Dictionary<(int layer, int origin), List<SimulationRuleModel>>();
         var layersWithRules = new HashSet<int>();
 
         if (fileRules == null) return (simRules, index, layersWithRules);
@@ -38,7 +38,7 @@ public static class RuleSetBuilder {
                 continue;
             }
 
-			var simReactants = new List<SimulationReactant>();
+			var simReactants = new List<SimulationReactantModel>();
             foreach (var r in fr.Reactants) {
                 int sidx = world.GetSpeciesIndex(r.SpeciesName);
                 if (sidx < 0) { warnings.Add($"RULE WARNING: {fr.VerboseRule}\t\t - reactant unknown species '{r.SpeciesName}'"); continue; }
@@ -57,16 +57,16 @@ public static class RuleSetBuilder {
                     continue;
                 }
 
-				simReactants.Add(new SimulationReactant(sidx, lidx, r.Count, r.Sign));
+				simReactants.Add(new SimulationReactantModel(sidx, lidx, r.Count, r.Sign));
             }
 
-            var sr = new SimulationRule(layerIdx, originIdx, simReactants, newIdx, fr.Probability, fr.VerboseRule) {
+            var sr = new SimulationRuleModel(layerIdx, originIdx, simReactants, newIdx, fr.Probability, fr.VerboseRule) {
                 VerboseRule = fr.VerboseRule
             };
             simRules.Add(sr);
 
             var key = (layerIdx, originIdx);
-            if (!index.TryGetValue(key, out var list)) { list = new List<SimulationRule>(); index[key] = list; }
+            if (!index.TryGetValue(key, out var list)) { list = []; index[key] = list; }
             list.Add(sr);
             layersWithRules.Add(layerIdx);
         }

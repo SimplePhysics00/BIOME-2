@@ -44,13 +44,22 @@ uniform int uShowGrid;
 uniform float uPixelsPerUnit;
 uniform float uGridThicknessPx;
 uniform float uCellSize;
-uniform sampler2D uCellColors;
+uniform sampler2D uCellIndices; // R8 texture containing species indices per cell (normalized)
+uniform sampler2D uPalette;     // 1xN RGBA palette texture
+uniform int uSpeciesCount;
 
 void main()
 {
-    // Fetch the per-cell color using integer texel fetch for exact texel.
+    // Fetch the per-cell species index from the index texture. The index texture
+    // is stored as R8 (normalized) so multiply back to 0..255 and clamp to species count.
     ivec2 coord = vCellCoord;
-    vec4 texColor = texelFetch(uCellColors, coord, 0);
+    float idxNorm = texelFetch(uCellIndices, coord, 0).r;
+    int idx = int(idxNorm * 255.0 + 0.5);
+    if (uSpeciesCount > 0) idx = clamp(idx, 0, uSpeciesCount - 1);
+
+    // Lookup color in the palette (palette is a 1xN texture, sample by texelFetch for exact lookup).
+    ivec2 pcoord = ivec2(idx, 0);
+    vec4 texColor = texelFetch(uPalette, pcoord, 0);
 
     // If grid is disabled, output the texel color directly so adjacent
     // cells with the same color render contiguously (no seams).

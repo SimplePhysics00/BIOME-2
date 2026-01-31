@@ -47,11 +47,11 @@ public sealed partial class InputState {
     private int _lastPlacedY = -1;
 
     // Snapshot of selected species indices for painting
-    private int[] _selectedSpecies = Array.Empty<int>();
+    private int[] _selectedSpecies = [];
 
     // Set snapshot of selected species indices (called from UI)
     public void SetSelectedSpeciesIndices(int[] indices) {
-        _selectedSpecies = indices ?? Array.Empty<int>();
+        _selectedSpecies = indices ?? [];
     }
 
     public PlacementMode GetPlacementMode() => _placementMode;
