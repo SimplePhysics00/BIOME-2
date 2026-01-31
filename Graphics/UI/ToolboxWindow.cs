@@ -8,6 +8,7 @@ using System.IO;
 using System.Numerics;
 using System.Windows.Forms;
 using static Biome2.Input.InputState;
+using static Biome2.Input.PlacementModes;
 using static System.ComponentModel.Design.ObjectSelectorEditor;
 
 namespace Biome2.Graphics.UI;

@@ -5,6 +5,7 @@ using Biome2.World;
 using OpenTK.Graphics.OpenGL4;
 using System.Runtime.InteropServices;
 using OpenTK.Mathematics;
+using static Biome2.Input.PlacementModes;
 
 namespace Biome2.Graphics;
 
@@ -95,7 +96,7 @@ public sealed class Renderer(float cellSize) : IDisposable {
 		int instanceCount = 0;
 		float[] instanceData = [];
 
-		if (input.GetPlacementMode() == Input.InputState.PlacementMode.Pixel || !input.IsPlacing()) {
+		if (input.GetPlacementMode() == PlacementMode.Pixel || !input.IsPlacing()) {
 			if (hoverX >= 0 && hoverX < _world.WidthCells && hoverY >= 0 && hoverY < _world.HeightCells) {
 				instanceCount = 1;
 				instanceData = [hoverX * _cellSize, hoverY * _cellSize, 1.0f, 1.0f];

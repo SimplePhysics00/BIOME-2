@@ -1,6 +1,7 @@
 ﻿using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using OpenTK.Mathematics;
+using static Biome2.Input.PlacementModes;
 
 namespace Biome2.Input;
 
@@ -8,7 +9,7 @@ namespace Biome2.Input;
 /// Centralized, frame coherent input snapshot.
 /// Later, ImGui can mark when it wants to capture mouse and keyboard input.
 /// </summary>
-public sealed partial class InputState {
+public sealed class InputState {
 	public float MouseX { get; private set; }
 	public float MouseY { get; private set; }
 	public float MouseDeltaX { get; private set; }
