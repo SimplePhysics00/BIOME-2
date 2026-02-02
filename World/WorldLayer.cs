@@ -1,4 +1,7 @@
-﻿namespace Biome2.World;
+﻿using Biome2.World;
+using Biome2.World.CellGrid;
+
+namespace Biome2.World;
 
 /// <summary>
 /// A world has multiple layers, each layer has its own cell grid.
@@ -6,10 +9,10 @@
 /// </summary>
 public sealed class WorldLayer {
     public string Name { get; set; }
-    public CellGrid Grid { get; }
+    public ICellGrid Grid { get; }
 
     public WorldLayer(string name, int widthCells, int heightCells) {
         Name = name;
-        Grid = new CellGrid(widthCells, heightCells);
+        Grid = new RectCellGrid(widthCells, heightCells);
     }
 }

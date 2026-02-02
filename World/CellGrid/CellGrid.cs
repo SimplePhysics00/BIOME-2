@@ -1,4 +1,4 @@
-﻿namespace Biome2.World;
+﻿namespace Biome2.World.CellGrid;
 
 /// <summary>
 /// One layer of cells. Uses double buffering for safe parallel simulation.
@@ -21,7 +21,7 @@ public sealed class CellGrid {
 		_next = new byte[width * height];
 	}
 
-	public int IndexOf(int x, int y) => (y * Width) + x;
+	public int IndexOf(int x, int y) => y * Width + x;
 
 	public byte GetCurrent(int x, int y) => _current[IndexOf(x, y)];
     public void SetCurrent(int x, int y, byte value) => _current[IndexOf(x, y)] = value;

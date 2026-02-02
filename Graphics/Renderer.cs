@@ -6,6 +6,7 @@ using OpenTK.Graphics.OpenGL4;
 using System.Runtime.InteropServices;
 using OpenTK.Mathematics;
 using static Biome2.Input.PlacementModes;
+using Biome2.World.CellGrid;
 
 namespace Biome2.Graphics;
 
@@ -354,14 +355,14 @@ public sealed class Renderer(float cellSize) : IDisposable {
 
 	// Full upload of a CellGrid into the index texture (R8). Also ensure the palette texture
 	// is uploaded from the cached _speciesPalette.
-	private void UploadGridToTexture(CellGrid grid) {
-		int w = grid.Width;
-		int h = grid.Height;
-		byte[] indices = new byte[w * h];
-		var src = grid.CurrentSpan;
-		for (int i = 0; i < src.Length; i++) {
-			indices[i] = src[i];
-		}
+    private void UploadGridToTexture(ICellGrid grid) {
+        int w = grid.Width;
+        int h = grid.Height;
+        byte[] indices = new byte[w * h];
+        var src = grid.CurrentSpan;
+        for (int i = 0; i < src.Length; i++) {
+            indices[i] = src[i];
+        }
 
 		GCHandle gcHandle = GCHandle.Alloc(indices, GCHandleType.Pinned);
 		try {
@@ -398,15 +399,15 @@ public sealed class Renderer(float cellSize) : IDisposable {
 	}
 
 	// Update a single cell texel using TexSubImage2D for a 1x1 region.
-	public void UploadSingleCell(CellGrid grid, int x, int y) {
+    public void UploadSingleCell(ICellGrid grid, int x, int y) {
 		if (_cellIndexTex == 0)
 			return;
-		int w = grid.Width;
-		int h = grid.Height;
+        int w = grid.Width;
+        int h = grid.Height;
 		if (x < 0 || x >= w || y < 0 || y >= h)
 			return;
 
-		byte value = grid.CurrentSpan[grid.IndexOf(x, y)];
+        byte value = grid.CurrentSpan[grid.IndexOf(x, y)];
 		byte[] tmp = new byte[1] { value };
 		GCHandle gcHandle = GCHandle.Alloc(tmp, GCHandleType.Pinned);
 		try {
@@ -480,11 +481,11 @@ public sealed class Renderer(float cellSize) : IDisposable {
 	}
 
 	// Optional helper: update a rectangular region of cells (x,y,w,h)
-	public void UploadCellsRegion(CellGrid grid, int x, int y, int w, int h) {
+    public void UploadCellsRegion(ICellGrid grid, int x, int y, int w, int h) {
 		if (_cellIndexTex == 0)
 			return;
-		int gw = grid.Width;
-		int gh = grid.Height;
+        int gw = grid.Width;
+        int gh = grid.Height;
 		int rx = Math.Max(0, x);
 		int ry = Math.Max(0, y);
 		int rw = Math.Min(w, gw - rx);
@@ -493,14 +494,14 @@ public sealed class Renderer(float cellSize) : IDisposable {
 			return;
 
 		byte[] indices = new byte[rw * rh];
-		var src = grid.CurrentSpan;
+        var src = grid.CurrentSpan;
 		for (int yy = 0; yy < rh; yy++) {
 			int sy = ry + yy;
-			int rowBaseSrc = sy * grid.Width;
+            int rowBaseSrc = sy * grid.Width;
 			int rowBaseDst = yy * rw;
 			for (int xx = 0; xx < rw; xx++) {
 				int sx = rx + xx;
-				byte value = src[rowBaseSrc + sx];
+                byte value = src[rowBaseSrc + sx];
 				indices[rowBaseDst + xx] = value;
 			}
 		}

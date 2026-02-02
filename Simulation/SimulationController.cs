@@ -332,69 +332,12 @@ public sealed class SimulationController : IDisposable {
 				// For exact-layer reactants, Count/Sign semantics are treated as == by design when referencing a single cell.
 				continue;
             } else {
-                // examine the 8-neighborhood on the current layer
-                var targetGrid2 = layer.Grid;
-                int ni = 0;
-				for (int oy = -1; oy <= 1; oy++) {
-					for (int ox = -1; ox <= 1; ox++) {
-						if (ox == 0 && oy == 0)
-							continue;
-						int nx = x + ox;
-						int ny = y + oy;
-
-						bool outOfX = nx < 0 || nx >= targetGrid2.Width;
-						bool outOfY = ny < 0 || ny >= targetGrid2.Height;
-
-						// Default to BORDER: neighbor ignored if out of bounds.
-						bool useNeighbor = true;
-						byte backupNeighborValue = 255; // sentinel non-matching species
-
-						switch (_edgeMode) {
-							case EdgeMode.WRAP:
-								if (nx < 0)
-									nx += targetGrid2.Width;
-								else if (nx >= targetGrid2.Width)
-									nx -= targetGrid2.Width;
-								if (ny < 0)
-									ny += targetGrid2.Height;
-								else if (ny >= targetGrid2.Height)
-									ny -= targetGrid2.Height;
-								break;
-							case EdgeMode.WRAPX:
-								if (nx < 0)
-									nx += targetGrid2.Width;
-								else if (nx >= targetGrid2.Width)
-									nx -= targetGrid2.Width;
-								if (outOfY)
-									useNeighbor = false;
-								break;
-							case EdgeMode.WRAPY:
-								if (ny < 0)
-									ny += targetGrid2.Height;
-								else if (ny >= targetGrid2.Height)
-									ny -= targetGrid2.Height;
-								if (outOfX)
-									useNeighbor = false;
-								break;
-							case EdgeMode.INFINITE:
-								// INFINITE deferred: for now treat as BORDER (ignore out-of-bounds neighbors)
-								if (outOfX || outOfY)
-									useNeighbor = false;
-								backupNeighborValue = 0; // "infinite" default space
-								break;
-							default:
-								// BORDER
-								if (outOfX || outOfY)
-									useNeighbor = false;
-								break;
-						}
-
-						neighborIdx[ni++] = useNeighbor ? targetGrid2.GetCurrent(nx, ny) : backupNeighborValue;
-					}
-				}
-
-				if (!react.Check(neighborIdx)) { allReactantsMatch = false; break; }
-			}
+                // ask the grid implementation to populate neighbors according to topology/edge-mode
+                var targetGrid = layer.Grid;
+                int written = targetGrid.GetNeighbors(x, y, _edgeMode, neighborIdx);
+                // For rectangular grids written == 8; react.Check will use neighbors.Length as provided
+                if (!react.Check(neighborIdx.Slice(0, written))) { allReactantsMatch = false; break; }
+            }
 		}
 
 		return allReactantsMatch;
