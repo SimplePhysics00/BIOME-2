@@ -38,7 +38,7 @@ void main()
         float radius = length(centered);
 
         // radial padding decreases with radius to generate extra spacing near center
-        float radialPad = uCellSize * (0.5 + 0.5 * exp(-radius / (uCellSize * 4.0)));
+        float radialPad = uCellSize * (0.25 + 0.75 * exp(-radius / (uCellSize * 4.0)));
         float radiusForArc = radius + radialPad;
         float cnt = max(1.0, aInstance.w);
         float arcOuter = 2.0 * 3.14159265359 * max(radiusForArc, 1e-6) / cnt;
@@ -195,6 +195,7 @@ layout(location = 1) in vec4 aInstance; // origin.xy, size.xy
 uniform mat4 uViewProj;
 uniform float uCellSize;
 uniform int uUseTrapezoid;
+uniform vec2 uDiskCenter;
 
 const float PI = 3.14159265359;
 
@@ -206,20 +207,27 @@ out vec2 vInstanceSize;
 void main()
 {
     if (uUseTrapezoid == 1) {
-        // Interpret aInstance as: xy = origin (centered world coords), z = angle, w = ring cell count
+        // Interpret aInstance as: xy = origin (absolute world coords), z = angle, w = ring cell count
         float angle = aInstance.z - PI * 0.5; // align short edge inward
         float t = aLocalPos.y;
 
-        float radius = length(aInstance.xy);
+        // compute radius relative to disk center so padding matches CPU
+        vec2 centered = aInstance.xy - uDiskCenter;
+        float radius = length(centered);
+
+        // radial padding (same formula as CPU)
+        float radialPad = uCellSize * (0.25 + 0.75 * exp(-radius / (uCellSize * 4.0)));
+        float radiusForArc = radius + radialPad;
+
         float cnt = max(1.0, aInstance.w);
-        float arc = 2.0 * PI * max(radius, 1e-6) / cnt;
-        float arcInner = 2.0 * PI * max(radius - uCellSize, 1e-6) / cnt;
-        float halfOuter = max(0.5 * arc, 0.5);
+        float arcOuter = 2.0 * PI * max(radiusForArc, 1e-6) / cnt;
+        float arcInner = 2.0 * PI * max(radiusForArc - uCellSize, 1e-6) / cnt;
+        float halfOuter = max(0.5, 0.5 * arcOuter);
         float halfInner = clamp(0.5 * arcInner, 0.0, halfOuter);
         float halfWidth = mix(halfInner, halfOuter, t);
 
         float xLocal = (aLocalPos.x - 0.5) * 2.0 * halfWidth;
-        float yLocal = (aLocalPos.y - 0.5) * uCellSize;
+        float yLocal = (aLocalPos.y - 0.5) * uCellSize + radialPad;
 
         float ca = cos(angle);
         float sa = sin(angle);

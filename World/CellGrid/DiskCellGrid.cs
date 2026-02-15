@@ -281,7 +281,7 @@ public sealed class DiskCellGrid : ICellGrid
         float[] padded = new float[_rings];
         for (int rr = 0; rr < _rings; rr++) {
             float baseRad = (rr + 1) * cellSize;
-            float pad = cellSize * (0.5f + 0.5f * (float)Math.Exp(-baseRad / (cellSize * 4.0f)));
+            float pad = cellSize * (0.25f + 0.75f * (float)Math.Exp(-baseRad / (cellSize * 4.0f)));
             padded[rr] = baseRad + pad;
         }
 
