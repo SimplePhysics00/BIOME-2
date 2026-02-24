@@ -120,7 +120,7 @@ public sealed class Renderer(float cellSize) : IDisposable {
         // Reuse preallocated array to avoid allocations
         float[] instanceData = _highlightInstanceData;
 
-        if (input.GetPlacementMode() == PlacementMode.Pixel || !input.IsPlacing()) {
+        if (input.GetPlacementMode() == PlacementMode.PIXEL || !input.IsPlacing()) {
             if (hoverX >= 0 && hoverX < _world.WidthCells && hoverY >= 0 && hoverY < _world.HeightCells) {
                 instanceCount = 1;
                 // If disk topology, request world-centered instance data from the disk grid so highlight matches rendering
@@ -198,7 +198,7 @@ public sealed class Renderer(float cellSize) : IDisposable {
         // Choose highlight shader per-frame. For hex topology + zone placement we
         // need the rectangular highlight vertex shader so region sizing is correct.
         ShaderProgram shaderToUse = _highlightShader!;
-        if (input.GetPlacementMode() == PlacementMode.Zone && _world.GridTopology == GridTopology.HEX) {
+        if (input.GetPlacementMode() == PlacementMode.ZONE && _world.GridTopology == GridTopology.HEX) {
             shaderToUse = _highlightShaderRect!;
         }
         // Use the chosen highlight program and VAO first, then upload instance data
@@ -244,7 +244,7 @@ public sealed class Renderer(float cellSize) : IDisposable {
         if (uTimeH >= 0) GL.Uniform1(uTimeH, (float)DateTime.Now.TimeOfDay.TotalSeconds);
         if (uPixelsPerUnitH >= 0) GL.Uniform1(uPixelsPerUnitH, camera.Zoom);
         // If using hex topology and user is doing a zone placement, request rectangular highlight
-        int useRect = (input.GetPlacementMode() == PlacementMode.Zone && _world.GridTopology == GridTopology.HEX) ? 1 : 0;
+        int useRect = (input.GetPlacementMode() == PlacementMode.ZONE && _world.GridTopology == GridTopology.HEX) ? 1 : 0;
         if (uUseRectH >= 0) GL.Uniform1(uUseRectH, useRect);
         if (uBorderThicknessH >= 0) GL.Uniform1(uBorderThicknessH, 2.0f);
         if (uDotFreqH >= 0) GL.Uniform1(uDotFreqH, 4.0f);

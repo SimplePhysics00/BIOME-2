@@ -2,6 +2,8 @@ using OpenTK.Mathematics;
 
 namespace Biome2.World.CellGrid;
 
+// TODO: The hex mask logic is currently duplicated in both HexCellGrid and HexRenderer for convenience; consider centralizing it in a shared helper class if it becomes more complex or if more hex grid types need to share it.
+// TODO: The mask logic still needs effective edge detection and wrapping logic; the current implementation is a simple bounding hex shape that treats all backing grid cells as valid, but this means that the corners of the backing rectangle are still valid cells even though they don't have the full hex neighborhood. We have prevented wrapping for now until this can be effectively fixed.
 /// <summary>
 /// Simple hexagonal grid laid out on a rectangular backing CellGrid.
 /// Logical coords: x = column, y = row. This implementation produces a
@@ -18,7 +20,14 @@ public sealed class HexCellGrid : ICellGrid
     private readonly int _cols;
     private readonly int _rows;
     private readonly int _depth;
-    private readonly int _centerAq;
+
+	// Precomputed radii along cube axes for the hex mask, derived from the provided dimensions. These define the extents of the hex-shaped mask within the rectangular backing grid.
+    private readonly int _rx;
+    private readonly int _ry;
+    private readonly int _rz;
+
+	// Precomputed center axial coordinates for the backing grid, used for hex mask calculations and wrapping logic
+	private readonly int _centerAq;
     private readonly int _centerAr;
 
     // Public properties
@@ -35,9 +44,14 @@ public sealed class HexCellGrid : ICellGrid
         _depth = Math.Max(1, depth);
         _dataGrid = new DataGrid(_cols, _rows);
 
-        // Precompute center axial coordinates for the backing grid so we
-        // don't recalculate them repeatedly in hot paths.
-        _centerAq = (_cols - 1) / 2;
+		// radii along cube axes: map WIDTH -> rx (cube x), HEIGHT -> rz (cube z), DEPTH -> ry (cube y)
+		_rx = (_cols - 1) / 2 + 1;
+		_rz = (_rows - 1) / 2 + 1;
+		_ry = (_depth - 1) / 2 + 1;
+
+		// Precompute center axial coordinates for the backing grid so we
+		// don't recalculate them repeatedly in hot paths.
+		_centerAq = (_cols - 1) / 2;
         _centerAr = (_rows - 1) / 2 - ((_centerAq - (_centerAq & 1)) / 2);
     }
 
@@ -147,11 +161,7 @@ public sealed class HexCellGrid : ICellGrid
             (x-1, y-1),  // NW
         ];
 
-        // Helper: test a candidate coordinate both inside rectangular backing storage
-        // and inside the hex mask (so that masked-off corners are treated as empty).
-        bool IsCandidateValid(int candX, int candY) => candX >= 0 && candX < _cols && candY >= 0 && candY < _rows && IsMaskedCell(candX, candY);
-
-        foreach (var neighbor in neighbors) {
+		foreach (var neighbor in neighbors) {
             int candidateX = neighbor.cx;
             int candidateY = neighbor.cy;
 
@@ -162,7 +172,7 @@ public sealed class HexCellGrid : ICellGrid
             // If the immediate neighbor is valid, use it directly
             if (IsCandidateValid(candidateX, candidateY)) {
                 selectedX = candidateX; selectedY = candidateY; foundNeighbor = true;
-            } else {
+            } /*else {
                 // For wrapping topologies, first attempt to map the candidate to
                 // its opposite counterpart across the hex-shaped mask by
                 // reflecting cube coordinates through the center. This yields a
@@ -207,7 +217,7 @@ public sealed class HexCellGrid : ICellGrid
                     if (!foundNeighbor) {
                         int[] offsetRange = new int[] { -1, 0, 1 };
 
-                        /*for (int manhattanDistance = 0; manhattanDistance <= 2 && !foundNeighbor; manhattanDistance++) {
+                        *//*for (int manhattanDistance = 0; manhattanDistance <= 2 && !foundNeighbor; manhattanDistance++) {
                             foreach (int offsetX in offsetRange) {
                                 foreach (int offsetY in offsetRange) {
                                     if (Math.Abs(offsetX) + Math.Abs(offsetY) != manhattanDistance) continue;
@@ -219,11 +229,11 @@ public sealed class HexCellGrid : ICellGrid
                                 }
                                 if (foundNeighbor) break;
                             }
-                        }*/
+                        }*//*
                     }
                 }
                 // If wrapping wasn't allowed or nothing matched, foundNeighbor remains false
-            }
+            }*/
 
             // Write either the neighbor value or the chosen fill value
             dest[writeIndex++] = foundNeighbor ? _dataGrid.GetCurrent(selectedX, selectedY) : fillValue;
@@ -264,8 +274,6 @@ public sealed class HexCellGrid : ICellGrid
         };
 
         // Reuse much of the logic from GetNeighbors but record coordinates instead
-        bool IsCandidateValid(int cx, int cy) => cx >= 0 && cx < _cols && cy >= 0 && cy < _rows && IsMaskedCell(cx, cy);
-
         foreach (var pair in neigh) {
             int neighborX = pair.Item1;
             int neighborY = pair.Item2;
@@ -284,19 +292,16 @@ public sealed class HexCellGrid : ICellGrid
                     int nAq = neighborX;
                     int nAr = neighborY - ((neighborX - (neighborX & 1)) / 2);
 
-                    int centerAq = _centerAq;
-                    int centerAr = _centerAr;
-
-                    int ncx = nAq - centerAq;
-                    int ncz = nAr - centerAr;
+					int ncx = nAq - _centerAq;
+                    int ncz = nAr - _centerAr;
                     int ncy = -ncx - ncz;
 
                     int ocx = -ncx;
                     int ocz = -ncz;
                     int ocy = -ncy;
 
-                    int oppAq = ocx + centerAq;
-                    int oppAr = ocz + centerAr;
+                    int oppAq = ocx + _centerAq;
+                    int oppAr = ocz + _centerAr;
                     int oppX = oppAq;
                     int oppY = oppAr + ((oppAq - (oppAq & 1)) / 2);
 
@@ -309,8 +314,8 @@ public sealed class HexCellGrid : ICellGrid
 
                     // Fallback: legacy tiled search
                     if (!used) {
-                        int[] offsetRangeX = new int[] { -1, 0, 1 };
-                        int[] offsetRangeY = new int[] { -1, 0, 1 };
+                        int[] offsetRangeX = [-1, 0, 1];
+                        int[] offsetRangeY = [-1, 0, 1];
 
                         for (int manhattanDistance = 0; manhattanDistance <= 2 && !used; manhattanDistance++) {
                             foreach (int offsetX in offsetRangeX) {
@@ -351,11 +356,6 @@ public sealed class HexCellGrid : ICellGrid
         // Convert offset coords (odd-q vertical layout) to axial then to cube
         // coordinates centered on the backing grid, then test against radii.
 
-        // radii along cube axes: map WIDTH -> rx (cube x), HEIGHT -> rz (cube z), DEPTH -> ry (cube y)
-        int rx = Math.Max(0, (_cols - 1) / 2) + 1;
-        int rz = Math.Max(0, (_rows - 1) / 2) + 1;
-        int ry = Math.Max(0, (_depth - 1) / 2) + 1;
-
         // offset (odd-q) -> axial
         // Convert from odd-q (vertical layout where odd columns are offset down)
         // to axial coordinates (q = col, r = row adjusted for offset).
@@ -367,6 +367,12 @@ public sealed class HexCellGrid : ICellGrid
         int cz = ar - _centerAr;
         int cy = -cx - cz;
 
-        return Math.Abs(cx) < rx && Math.Abs(cy) < ry && Math.Abs(cz) < rz;
+        return Math.Abs(cx) < _rx && Math.Abs(cy) < _ry && Math.Abs(cz) < _rz;
     }
+
+	// Helper: test a candidate coordinate both inside rectangular backing storage
+	// and inside the hex mask (so that masked-off corners are treated as empty).
+	private	bool IsCandidateValid(int cx, int cy) => 
+        cx >= 0 && cx < _cols && cy >= 0 && cy < _rows && IsMaskedCell(cx, cy);
+
 }

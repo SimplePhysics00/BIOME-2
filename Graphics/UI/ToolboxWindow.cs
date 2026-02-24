@@ -204,8 +204,8 @@ internal sealed class ToolboxWindow
 		// Restart World button (centered)
 		{
 			var textSize = ImGui.CalcTextSize(RestartWorldButtonLabel);
-			var framePadding = ImGui.GetStyle().FramePadding;
-			var buttonWidth = textSize.X + framePadding.X * 2.0f;
+			var framePadding = ImGui.GetStyle().WindowPadding;
+			var buttonWidth = textSize.X + framePadding.X * 2.5f;
 			ImGui.SetCursorPosX((_windowWidth - buttonWidth) * 0.5f);
 		}
 		if (ImGui.Button(RestartWorldButtonLabel)) {
@@ -238,12 +238,12 @@ internal sealed class ToolboxWindow
 
 		// Paint mode radio buttons (Pixel / Zone)
 		int paintMode = (int)input.GetPlacementMode();
-		if (ImGui.RadioButton("Pixel##paintmode", ref paintMode, (int)PlacementMode.Pixel)) {
-			input.SetPlacementMode(PlacementMode.Pixel);
+		if (ImGui.RadioButton("Pixel##paintmode", ref paintMode, (int)PlacementMode.PIXEL)) {
+			input.SetPlacementMode(PlacementMode.PIXEL);
 		}
 		ImGui.SameLine();
-		if (ImGui.RadioButton("Zone##paintmode", ref paintMode, (int)PlacementMode.Zone)) {
-			input.SetPlacementMode(PlacementMode.Zone);
+		if (ImGui.RadioButton("Zone##paintmode", ref paintMode, (int)PlacementMode.ZONE)) {
+			input.SetPlacementMode(PlacementMode.ZONE);
 		}
 
 		// Species selection: list species with checkboxes to enable manual placement

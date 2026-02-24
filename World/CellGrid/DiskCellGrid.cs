@@ -2,6 +2,8 @@ using OpenTK.Mathematics;
 
 namespace Biome2.World.CellGrid;
 
+// TODO: Some cells have more than 8 neighbors and some have less. An attempt was made to enforce 8, but 
+//  the logic is complex and may have edge cases.
 /// <summary>
 /// Disk-shaped grid implemented on top of a rectangular backing store.
 /// Logical coords: x = ring (0..rings-1), y = position along ring (0..ringCount-1)

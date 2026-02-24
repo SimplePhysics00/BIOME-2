@@ -60,12 +60,10 @@ public sealed class SimulationController : IDisposable {
     /// <summary>
     /// Restart the world to the initial state but with explicit width/height.
     /// If a last-applied WorldModel exists, it will be re-applied with the
-    /// supplied dimensions overriding the file values. Otherwise a blank world
-    /// will be created with the requested size and the current layer count.
+    /// supplied dimensions overriding the file values.
     /// </summary>
     public void RestartWorld(int width, int height, int depth)
     {
-        // If we have a last applied request, re-apply it but override sizing.
         if (_lastWorldModel != null)
         {
             var config = new WorldConfigModel(
@@ -86,33 +84,6 @@ public sealed class SimulationController : IDisposable {
 
             ApplyRules(req);
             return;
-        }
-
-        // No last request: construct a blank world with requested size and preserve layer count.
-        int layerCount = Math.Max(1, _world.LayerCount); // TODO: stop making corrections; handle errors instead
-        var newWorld = new WorldState(Math.Max(1, width), Math.Max(1, height), layerCount);
-
-        // Preserve the previously selected active layer index if possible so the visualized
-        // layer does not change when restarting (layers don't change in this path). TODO: move to restarts only, not new loads
-        int prevActive = _world.ActiveLayerIndex;
-        newWorld.ActiveLayerIndex = Math.Clamp(prevActive, 0, Math.Max(0, newWorld.LayerCount - 1));
-
-        lock (_stepLock)
-        {
-            _world = newWorld;
-            _rules = [];
-            _edgeMode = EdgeMode.BORDER;
-            _ruleIndex = [];
-            _layersWithRules = [];
-        }
-
-        try
-        {
-            WorldReplaced?.Invoke(_world);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"Exception while notifying WorldReplaced subscribers: {ex.Message}");
         }
     }
 
@@ -189,8 +160,6 @@ public sealed class SimulationController : IDisposable {
 
 	// Apply rules and species from a parsed file world model.
     public void ApplyRules(WorldModel worldModel) {
-        if (worldModel is null) return;
-
         // Keep a copy of the last applied world model so the world can be restarted to this initial state.
         _lastWorldModel = worldModel;
 
@@ -286,7 +255,7 @@ public sealed class SimulationController : IDisposable {
             // Per-layer mark-phase intent buffers. Use a fast-path for single intents to avoid
             // allocating a List for the common case where only one intent is produced per cell.
             var intentSingles = new System.Collections.Concurrent.ConcurrentBag<MoveIntent>();
-            var intentLists = new System.Collections.Concurrent.ConcurrentBag<System.Collections.Generic.List<MoveIntent>>();
+            var intentLists = new System.Collections.Concurrent.ConcurrentBag<List<MoveIntent>>();
 
             // (MoveIntent struct is declared at class scope.)
 
@@ -300,7 +269,7 @@ public sealed class SimulationController : IDisposable {
                 // Local state for produced intents. Fast-path for single intent avoids allocating a List.
                 MoveIntent singleIntent = default;
                 bool hasSingleIntent = false;
-                System.Collections.Generic.List<MoveIntent>? localIntents = null;
+                List<MoveIntent>? localIntents = null;
 
                 if (_ruleIndex.TryGetValue((layerIndex, originValue), out var candidates)) {
                     // Allocate neighbor and candidate buffers once per cell iteration (safer and reduces repeated stackallocs).
@@ -346,7 +315,7 @@ public sealed class SimulationController : IDisposable {
                                         hasSingleIntent = true;
                                     } else {
                                         if (localIntents == null) {
-                                            localIntents = new System.Collections.Generic.List<MoveIntent>(2);
+                                            localIntents = new List<MoveIntent>(2);
                                             if (hasSingleIntent) {
                                                 localIntents.Add(singleIntent);
                                                 hasSingleIntent = false;
@@ -383,18 +352,18 @@ public sealed class SimulationController : IDisposable {
 
             // Commit phase: collect intents and resolve conflicts (randomly choose one per destination)
             // Build a dictionary keyed by destination index
-            var destMap = new Dictionary<int, System.Collections.Generic.List<MoveIntent>>();
+            var destMap = new Dictionary<int, List<MoveIntent>>();
             foreach (var list in intentLists) {
                 foreach (var it in list) {
                     int dIdx = it.Dx + it.Dy * grid.Width;
-                    if (!destMap.TryGetValue(dIdx, out var l)) { l = new System.Collections.Generic.List<MoveIntent>(); destMap[dIdx] = l; }
+                    if (!destMap.TryGetValue(dIdx, out var l)) { l = new List<MoveIntent>(); destMap[dIdx] = l; }
                     l.Add(it);
                 }
             }
             // Include single-intent fast-path entries
             foreach (var s in intentSingles) {
                 int dIdx = s.Dx + s.Dy * grid.Width;
-                if (!destMap.TryGetValue(dIdx, out var l)) { l = new System.Collections.Generic.List<MoveIntent>(); destMap[dIdx] = l; }
+                if (!destMap.TryGetValue(dIdx, out var l)) { l = new List<MoveIntent>(); destMap[dIdx] = l; }
                 l.Add(s);
             }
 
@@ -413,7 +382,7 @@ public sealed class SimulationController : IDisposable {
                 if (dlist.Count == 0) continue;
 
                 // Filter out candidates whose source is already used
-                var available = new System.Collections.Generic.List<MoveIntent>();
+                var available = new List<MoveIntent>();
                 foreach (var c in dlist) {
                     int sIdx = c.Sx + c.Sy * grid.Width;
                     if (!usedSources.Contains(sIdx)) available.Add(c);

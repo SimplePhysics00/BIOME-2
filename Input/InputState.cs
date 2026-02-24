@@ -39,7 +39,7 @@ public sealed class InputState {
 	private float _lastMouseX;
 	private float _lastMouseY;
 
-	private PlacementMode _placementMode = PlacementMode.Pixel;
+	private PlacementMode _placementMode = PlacementMode.PIXEL;
 
 	// Right-drag state for panning
 	private bool _rightMouseWasDown;
@@ -136,7 +136,7 @@ public sealed class InputState {
             HandlePlacement(camera, renderer, simulation);
         } else {
             // If we were placing in Zone mode, finalize the rectangle on release
-            if (_placing && _placementMode == PlacementMode.Zone) {
+            if (_placing && _placementMode == PlacementMode.ZONE) {
                 FinalizeZonePlacement(camera, renderer, simulation);
             }
 
@@ -167,7 +167,7 @@ public sealed class InputState {
             cellY = (int) Math.Floor(worldPos.Y / cs);
         }
 
-		if (_placementMode == PlacementMode.Pixel) {
+		if (_placementMode == PlacementMode.PIXEL) {
             if (!_placing || cellX != _lastPlacedX || cellY != _lastPlacedY) {
                 // snapshot selected species indices
                 var sel = _selectedSpecies;
