@@ -123,7 +123,7 @@ public sealed class HexCellGrid : ICellGrid
     // neighbor ordering: N, NE, SE, S, SW, NW (then two padding entries)
     public int GetNeighbors(int x, int y, EdgeMode edgeMode, Span<byte> dest)
     {
-        if (dest.Length < 8) throw new ArgumentException("dest must be at least length 8", nameof(dest));
+        //if (dest.Length < 8) throw new ArgumentException("dest must be at least length 8", nameof(dest));
 
         // Values to use when a neighbor is out-of-bounds depending on edge mode
         const byte BackupBorder = 255;   // used for BORDER mode (default)
@@ -248,7 +248,7 @@ public sealed class HexCellGrid : ICellGrid
 
     public int GetNeighborCoordinates(int x, int y, EdgeMode edgeMode, Span<int> destX, Span<int> destY)
     {
-        if (destX.Length < 8 || destY.Length < 8) throw new ArgumentException("destX/destY must be at least length 8");
+        //if (destX.Length < 8 || destY.Length < 8) throw new ArgumentException("destX/destY must be at least length 8");
 
         int ni = 0;
         if (!IsValidCell(x, y)) {

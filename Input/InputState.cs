@@ -74,10 +74,10 @@ public sealed class InputState {
         // If renderer/world indicate a spiral topology, ask the DiskCellGrid to map world coords -> (ring,pos).
         var world = renderer.World;
 
-		if (world.ActiveLayer?.Grid is World.CellGrid.DiskCellGrid disk) {
+		if (world.ActiveLayer?.Grid is DiskCellGrid disk) {
 			var (X, Y) = disk.MapWorldToCell(worldPos, cs);
 			return (X, Y);
-		} else if (world.ActiveLayer?.Grid is World.CellGrid.HexCellGrid hex) {
+		} else if (world.ActiveLayer?.Grid is HexCellGrid hex) {
 			var (X, Y) = hex.MapWorldToCell(worldPos, cs);
 			return (X, Y);
 		} else {
@@ -154,11 +154,11 @@ public sealed class InputState {
         int cellX, cellY;
         var world = renderer.World;
 
-		if (world.ActiveLayer?.Grid is World.CellGrid.DiskCellGrid disk) {
+		if (world.ActiveLayer?.Grid is DiskCellGrid disk) {
 			var (X, Y) = disk.MapWorldToCell(worldPos, cs);
 			cellX = X;
 			cellY = Y;
-		} else if (world.ActiveLayer?.Grid is World.CellGrid.HexCellGrid hex) {
+		} else if (world.ActiveLayer?.Grid is HexCellGrid hex) {
             var (X, Y) = hex.MapWorldToCell(worldPos, cs);
             cellX = X;
             cellY = Y;

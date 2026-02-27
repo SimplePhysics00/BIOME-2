@@ -395,7 +395,7 @@ public sealed class Renderer(float cellSize) : IDisposable {
 	}
 
 	private void SetActiveGridShader(ShaderProgram shader) {
-		_shader = shader ?? throw new ArgumentNullException(nameof(shader));
+        _shader = shader;
 		// Query uniform locations on the active shader program so later Uniform calls
 		// write to the correct program without needing to rebind every time.
 		_uViewProj = _shader.GetUniformLocation("uViewProj");

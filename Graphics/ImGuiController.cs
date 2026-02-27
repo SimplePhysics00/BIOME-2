@@ -2,7 +2,6 @@ using ImGuiNET;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
-using OpenTK.Windowing.GraphicsLibraryFramework;
 using System.Runtime.InteropServices;
 using OpenTK.Mathematics;
 using Biome2.Graphics.UI;
@@ -109,13 +108,13 @@ public sealed class ImGuiController : IDisposable
         _window.KeyUp += OnKeyUp;
         _window.TextInput += OnTextInput;
 
-        SetPerFrameData();
+		SetPerFrameData();
     }
 
     public void RenderUI(Renderer renderer, Simulation.SimulationController simulation, Input.InputState input, Camera camera)
     {
-        // Start new frame
-        SetPerFrameData();
+		// Start new frame
+		SetPerFrameData();
         ImGui.NewFrame();
 
         // Render the toolbox window
@@ -150,8 +149,24 @@ public sealed class ImGuiController : IDisposable
                         ImGui.SetNextWindowBgAlpha(0.0f);
                         ImGui.Begin("##hover_overlay", flags);
                         ImGui.SetWindowFontScale(1.5f);
-                        ImGui.Text($"({hx}, {hy})");
+                        // Right-align using screen-space coordinates computed from window position/size and style padding.
+                        var cursorScreen = ImGui.GetCursorScreenPos();
+                        var style = ImGui.GetStyle();
+
+                        // We previously called SetNextWindowPos(..., pivot=(1,1)) with a 10px inset from the display size.
+                        // Use the same reference (io.DisplaySize.X - 10) as the window right edge so autosize doesn't cause feedback.
+                        float rightContentX = io.DisplaySize.X - 10f - style.WindowPadding.X;
+
+                        var nameSize = ImGui.CalcTextSize(name);
+                        ImGui.SetCursorScreenPos(new System.Numerics.Vector2(rightContentX - nameSize.X, cursorScreen.Y));
                         ImGui.Text(name);
+
+                        // After writing the first line, get the updated cursor screen Y for the next line.
+                        cursorScreen = ImGui.GetCursorScreenPos();
+                        var coordText = $"({hx}, {hy})";
+                        var coordSize = ImGui.CalcTextSize(coordText);
+                        ImGui.SetCursorScreenPos(new System.Numerics.Vector2(rightContentX - coordSize.X, cursorScreen.Y));
+                        ImGui.Text(coordText);
                         ImGui.End();
                         ImGui.PopStyleVar();
                     }
@@ -169,7 +184,7 @@ public sealed class ImGuiController : IDisposable
         RenderImDrawData(drawData);
     }
 
-    private void SetPerFrameData()
+    private static void SetPerFrameData()
     {
         var io = ImGui.GetIO();
         // Query the current GL viewport to determine the actual framebuffer size in pixels.

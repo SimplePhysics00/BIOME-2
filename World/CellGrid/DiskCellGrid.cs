@@ -105,7 +105,7 @@ public sealed class DiskCellGrid : ICellGrid
     /// </summary>
     public int GetNeighbors(int x, int y, EdgeMode edgeMode, Span<byte> dest)
     {
-        if (dest.Length < 8) throw new ArgumentException("dest must be at least length 8", nameof(dest));
+        //if (dest.Length < 8) throw new ArgumentException("dest must be at least length 8", nameof(dest));
 
         byte backupBorder = 255;
         byte backupInfinite = 0;
@@ -321,7 +321,7 @@ public sealed class DiskCellGrid : ICellGrid
     // Provide a simple neighbor coordinates implementation by calling GetNeighbors and mapping back to coords.
     public int GetNeighborCoordinates(int x, int y, EdgeMode edgeMode, Span<int> destX, Span<int> destY)
     {
-        if (destX.Length < 8 || destY.Length < 8) throw new ArgumentException("destX/destY must be at least length 8");
+        //if (destX.Length < 8 || destY.Length < 8) throw new ArgumentException("destX/destY must be at least length 8");
 
         int ni = 0;
         int r = x;

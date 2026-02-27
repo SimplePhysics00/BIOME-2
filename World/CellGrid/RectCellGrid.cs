@@ -36,12 +36,8 @@ public sealed class RectCellGrid : ICellGrid
         _dataGrid = new DataGrid(width, height);
     }
 
-    public RectCellGrid(DataGrid existing) {
-        _dataGrid = existing ?? throw new ArgumentNullException(nameof(existing));
-    }
-
     public int GetNeighbors(int x, int y, EdgeMode edgeMode, Span<byte> dest) {
-        if (dest.Length < 8) throw new ArgumentException("dest must be at least length 8", nameof(dest));
+        //if (dest.Length < 8) throw new ArgumentException("GetNeighbors parameter 'dest' must be at least length 8", nameof(dest));
 
         int ni = 0;
         int width = _dataGrid.Width;
@@ -94,7 +90,8 @@ public sealed class RectCellGrid : ICellGrid
     }
 
     public int GetNeighborCoordinates(int x, int y, EdgeMode edgeMode, Span<int> destX, Span<int> destY) {
-        if (destX.Length < 8 || destY.Length < 8) throw new ArgumentException("destX/destY must be at least length 8");
+        //if (destX.Length < 8 || destY.Length < 8) throw new ArgumentException("destX/destY must be at least length 8");
+        
         int ni = 0;
         int width = _dataGrid.Width;
         int height = _dataGrid.Height;

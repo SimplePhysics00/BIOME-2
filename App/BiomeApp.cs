@@ -18,12 +18,12 @@ public sealed class BiomeApp : GameWindow {
 
 	private readonly Performance _perf = new();
 
+	private InputState _input;
+
+	private ImGuiController _ui;
+
 	private Renderer _renderer = null!;
 	private Camera _camera = null!;
-
-	private InputState _input = null!;
-
-	private ImGuiController? _ui;
 
     private WorldState _world = null!;
 	private SimulationController _simulation = null!;
@@ -38,6 +38,10 @@ public sealed class BiomeApp : GameWindow {
 				Profile = ContextProfile.Core
 			}) {
 		_config = config;
+
+		// Initialize ImGui UI controller
+		_ui = new ImGuiController(this);
+		_input = new InputState();
 	}
 
 	protected override void OnLoad() {
@@ -45,7 +49,6 @@ public sealed class BiomeApp : GameWindow {
 
 		VSync = _config.VSyncEnabled ? VSyncMode.On : VSyncMode.Off;
 
-		_input = new InputState();
 		_camera = new Camera(Size.X, Size.Y);
 
         _world = WorldState.CreateBlank();
@@ -58,9 +61,6 @@ public sealed class BiomeApp : GameWindow {
 		_renderer = new Renderer(_config.CellSize);
 		_renderer.Initialize();
 		_renderer.SetWorld(_world);
-
-		// Initialize ImGui UI controller
-		_ui = new ImGuiController(this);
 
 		// Start with the camera showing the full world.
 		_camera.FrameWorld(
@@ -95,7 +95,7 @@ public sealed class BiomeApp : GameWindow {
 		_input.ProcessInputs(_camera, _world);
 
 		// Update UI input state so it can request capture of mouse/keyboard.
-		_ui?.UpdateInputState(_input);
+		_ui.UpdateInputState(_input);
 
 		// Camera movement now, UI can override input capture.
 		_camera.Update(_input, (float) args.Time);
@@ -123,7 +123,7 @@ public sealed class BiomeApp : GameWindow {
 		}
 
         // Render UI on top of world
-        _ui?.RenderUI(_renderer, _simulation, _input, _camera);
+        _ui.RenderUI(_renderer, _simulation, _input, _camera);
 
 		SwapBuffers();
 
@@ -132,18 +132,27 @@ public sealed class BiomeApp : GameWindow {
 
 	protected override void OnUnload() {
 		base.OnUnload();
-		// Unsubscribe from simulation events
+		// Unsubscribe from simulation events if subscribed
 		if (_simulation != null) {
-			_simulation.WorldReplaced -= OnWorldReplaced;
-
-			_renderer.Dispose();
-			_simulation.Dispose();
+			try {
+				_simulation.WorldReplaced -= OnWorldReplaced;
+			} catch {
+				// ignore if already unsubscribed
+			}
 		}
 
-        // Persist TPS stats
-        try {
-            _perf.SaveMaxTps(_simulation?.LastLoadedRulesFilePath);
-        } catch { }
+		// Dispose subsystems if they exist. Use null-conditional to be defensive
+		_renderer?.Dispose();
+		_simulation?.Dispose();
+		_ui?.Dispose();
+
+		// Persist TPS stats (log any error rather than silently swallowing)
+		try {
+			_perf.SaveMaxTps(_simulation?.LastLoadedRulesFilePath);
+		} catch (Exception ex) {
+			Logger.Warn($"Failed saving TPS stats: {ex.Message}");
+		}
+
 		Logger.Info("App unloaded.");
 	}
 }

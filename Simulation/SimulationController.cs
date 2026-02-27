@@ -106,7 +106,7 @@ public sealed class SimulationController : IDisposable {
 
     public SimulationController(WorldState world, Performance perf) {
         _world = world;
-        _perf = perf ?? throw new ArgumentNullException(nameof(perf));
+        _perf = perf;
 
         // Start paused, since we have no rules yet.
         Clock.Paused = true;
@@ -412,7 +412,7 @@ public sealed class SimulationController : IDisposable {
         // before a file is in use.
         try {
             if (!string.IsNullOrEmpty(LastLoadedRulesFilePath)) {
-                _perf?.RecordTick();
+                _perf.RecordTick();
             }
         } catch { }
 	}
