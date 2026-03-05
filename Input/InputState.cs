@@ -45,6 +45,12 @@ public sealed class InputState {
 	private bool _rightMouseWasDown;
     private bool _rightDragStarted;
     private Vector2 _rightDragStart;
+    
+	// Middle-drag state for rotation
+	private bool _middleMouseWasDown;
+	private bool _middleDragStarted;
+	private Vector2 _middleDragStart;
+    
     // Flag set when an interaction that should trigger a visual update occurred
     public bool HadInteraction { get; private set; }
 
@@ -100,6 +106,8 @@ public sealed class InputState {
             // reset drag/placing states to avoid stale state
             _rightMouseWasDown = false;
             _rightDragStarted = false;
+            _middleMouseWasDown = false;
+            _middleDragStarted = false;
             EndPlacement();
             return;
         }
@@ -129,6 +137,31 @@ public sealed class InputState {
         } else {
             _rightMouseWasDown = false;
             _rightDragStarted = false;
+        }
+
+        // Middle-button rotation
+        if (MouseMiddleDown) {
+            if (!_middleMouseWasDown) {
+                _middleMouseWasDown = true;
+                _middleDragStarted = false;
+                _middleDragStart = new Vector2(MouseX, MouseY);
+            } else {
+                if (!_middleDragStarted) {
+                    var dx = MouseX - _middleDragStart.X;
+                    var dy = MouseY - _middleDragStart.Y;
+                    if (dx * dx + dy * dy > 4.0f * 4.0f) {
+                        _middleDragStarted = true;
+                        camera.RotateBy(MouseDeltaX * 0.005f);
+                        HadInteraction = true;
+                    }
+                } else {
+                    camera.RotateBy(MouseDeltaX * 0.005f);
+                    HadInteraction = true;
+                }
+            }
+        } else {
+            _middleMouseWasDown = false;
+            _middleDragStarted = false;
         }
 
         // Left-button painting

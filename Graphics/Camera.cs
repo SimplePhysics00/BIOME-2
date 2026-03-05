@@ -13,12 +13,14 @@ public sealed class Camera(int viewportWidth, int viewportHeight) {
 
 	public Vector2 Position { get; private set; } = Vector2.Zero;
 	public float Zoom { get; private set; } = 1.0f;
+	public float Rotation { get; private set; } = 0.0f;
 	private float MinFitZoom = 1.0f;
 
     // Right mouse drag state for panning with a small movement threshold.
 	//private const float MinFarnessZoomFactor = 1.0f;
 	private const float MaxClosenessZoomFactor = 300.0f;
 	private const float ZoomScrollWheelFactor = 0.2f;
+	private const float RotationSensitivity = 0.005f;
 
 	public void Resize(int width, int height) {
 		ViewportWidth = width;
@@ -33,6 +35,8 @@ public sealed class Camera(int viewportWidth, int viewportHeight) {
 		MinFitZoom = Zoom * 0.25f;
 
 		Position = new Vector2(worldWidth * 0.5f, worldHeight * 0.5f);
+
+		Rotation = 0.0f;
 	}
 
 	public void Update(InputState input, float dt) {
@@ -95,6 +99,15 @@ public sealed class Camera(int viewportWidth, int viewportHeight) {
 		var top = Position.Y + halfH;
 
 		var projection = Matrix4.CreateOrthographicOffCenter(left, right, bottom, top, -1.0f, 1.0f);
+		
+		// Apply rotation around the camera center (Z-axis rotation)
+		if (MathF.Abs(Rotation) > 0.0001f) {
+			var translate1 = Matrix4.CreateTranslation(-Position.X, -Position.Y, 0);
+			var rotate = Matrix4.CreateRotationZ(-Rotation);
+			var translate2 = Matrix4.CreateTranslation(Position.X, Position.Y, 0);
+			projection = translate1 * rotate * translate2 * projection;
+		}
+		
 		return projection;
 	}
 
@@ -114,8 +127,19 @@ public sealed class Camera(int viewportWidth, int viewportHeight) {
 		// Convert screen (pixels) to world
 		var worldX = left + (sx / ViewportWidth) * (halfW * 2.0f);
 		var worldY = bottom + ((ViewportHeight - sy) / ViewportHeight) * (halfH * 2.0f);
+		var worldPos = new Vector2(worldX, worldY);
 
-		return new Vector2(worldX, worldY);
+		// Apply rotation: rotate the point around the camera center
+		if (MathF.Abs(Rotation) > 0.0001f) {
+			var relativePos = worldPos - Position;
+			var cos = MathF.Cos(Rotation);
+			var sin = MathF.Sin(Rotation);
+			var rotatedX = relativePos.X * cos - relativePos.Y * sin;
+			var rotatedY = relativePos.X * sin + relativePos.Y * cos;
+			worldPos = Position + new Vector2(rotatedX, rotatedY);
+		}
+
+		return worldPos;
 	}
 
     private T ApplyZoomFactor<T>(T value, float overrideZoom = -1) where T : struct {
@@ -127,5 +151,13 @@ public sealed class Camera(int viewportWidth, int viewportHeight) {
     // Public helper to pan the camera by a screen-space delta that is adjusted by zoom.
     public void PanBy(Vector2 screenDelta) {
         Position -= ApplyZoomFactor(screenDelta);
+    }
+
+    // Public helper to rotate the camera by a delta in radians.
+    public void RotateBy(float deltaRadians) {
+        Rotation += deltaRadians;
+        // Normalize rotation to [-PI, PI]
+        while (Rotation > MathF.PI) Rotation -= MathF.Tau;
+        while (Rotation < -MathF.PI) Rotation += MathF.Tau;
     }
 }
