@@ -4,23 +4,22 @@ using OpenTK.Mathematics;
 namespace Biome2.Graphics;
 
 /// <summary>
-/// Simple 2D camera that supports pan and zoom.
+/// Simple 2D camera that supports pan, zoom, and z-axis rotation.
 /// World coordinates are in float units, independent of cells.
 /// </summary>
 public sealed class Camera(int viewportWidth, int viewportHeight) {
-	public int ViewportWidth { get; private set; } = viewportWidth;
-	public int ViewportHeight { get; private set; } = viewportHeight;
-
-	public Vector2 Position { get; private set; } = Vector2.Zero;
-	public float Zoom { get; private set; } = 1.0f;
-	public float Rotation { get; private set; } = 0.0f;
-	private float MinFitZoom = 1.0f;
-
-    // Right mouse drag state for panning with a small movement threshold.
-	//private const float MinFarnessZoomFactor = 1.0f;
 	private const float MaxClosenessZoomFactor = 300.0f;
 	private const float ZoomScrollWheelFactor = 0.2f;
 	private const float RotationSensitivity = 0.005f;
+
+	private int ViewportWidth = viewportWidth;
+	private int ViewportHeight = viewportHeight;
+
+	public Vector2 Position { get; private set; } = Vector2.Zero;
+	public float Zoom { get; private set; } = 1.0f;
+	private float MinFitZoom = 1.0f;
+
+	private float Rotation = 0.0f;
 
 	public void Resize(int width, int height) {
 		ViewportWidth = width;

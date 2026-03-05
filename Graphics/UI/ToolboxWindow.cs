@@ -32,8 +32,7 @@ internal sealed class ToolboxWindow
 
     private static ImGuiWindowFlags GetWindowFlags()
     {
-        return ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoCollapse
-			| ImGuiWindowFlags.NoSavedSettings
+        return ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings
 			| ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoBringToFrontOnFocus;
     }
 

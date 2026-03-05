@@ -248,8 +248,8 @@ public sealed class Renderer(float cellSize) : IDisposable {
         if (uUseRectH >= 0) GL.Uniform1(uUseRectH, useRect);
         if (uBorderThicknessH >= 0) GL.Uniform1(uBorderThicknessH, 2.0f);
         if (uDotFreqH >= 0) GL.Uniform1(uDotFreqH, 4.0f);
-        if (uColorAH >= 0) GL.Uniform3(uColorAH, new OpenTK.Mathematics.Vector3(0f,0f,0f));
-        if (uColorBH >= 0) GL.Uniform3(uColorBH, new OpenTK.Mathematics.Vector3(1f,1f,1f));
+        if (uColorAH >= 0) GL.Uniform3(uColorAH, new Vector3(0f,0f,0f));
+        if (uColorBH >= 0) GL.Uniform3(uColorBH, new Vector3(1f,1f,1f));
         if (uAlphaH >= 0) GL.Uniform1(uAlphaH, 1.0f);
 
         // Ensure blending is enabled for highlight overlays (some topology draws disable blending)
