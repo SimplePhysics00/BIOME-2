@@ -350,7 +350,7 @@ public sealed class RulesLoader {
 						while (idx < core.Length && char.IsDigit(core[idx]))
 							idx++;
 
-						int count = 1; // default of 1 is applied if no explicit count is provided
+						int count = -1;
 						if (idx > 0) {
 							if (!int.TryParse(core.AsSpan(0, idx), out count)) {
 								LogLineParseError($"Invalid reactant count '{core[..idx]}'", core[..idx]);
@@ -371,6 +371,11 @@ public sealed class RulesLoader {
 						if (colonPos >= 0) {
 							reactLayer = speciesPart[..colonPos];
 							speciesName = speciesPart[(colonPos + 1)..];
+						}
+
+						if (reactLayer == string.Empty && count == -1) {
+							// default count of 1 is applied if no explicit count is provided and no layer prefix is present
+							count = 1;
 						}
 
 						list.Add(new ReactantModel(speciesName, reactLayer, count, sign, pendingExclusion));
