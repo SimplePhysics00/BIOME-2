@@ -31,7 +31,19 @@ public sealed class RulesLoader {
 		void LogLineParseError(string reason, string? substringForPos = null) {
 			var lineInfo = string.IsNullOrEmpty(_currentRawLine) ? string.Empty : $"Line=\"{_currentRawLine}\"";
 			int pos = GetPosition(substringForPos);
-			Logger.Error($"Parse error at line {_currentLineNo}, pos {pos}: {reason}. {lineInfo}");
+			Logger.Error($"Parse error, line #{_currentLineNo}, pos {pos}: {reason}. {lineInfo}");
+		}
+
+		void LogLineParseWarning(string reason, string? substringForPos = null) {
+			var lineInfo = string.IsNullOrEmpty(_currentRawLine) ? string.Empty : $"Line=\"{_currentRawLine}\"";
+			int pos = GetPosition(substringForPos);
+			Logger.Warn($"Parse warning, line #{_currentLineNo}, pos {pos}: {reason}. {lineInfo}");
+		}
+
+		void LogLineParseInfo(string message, string? substringForPos = null) {
+			var lineInfo = string.IsNullOrEmpty(_currentRawLine) ? string.Empty : $"Line=\"{_currentRawLine}\"";
+			int pos = GetPosition(substringForPos);
+			Logger.Info($"Line #{_currentLineNo}, pos {pos}: {message}. {lineInfo}");
 		}
 
 		var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -338,7 +350,7 @@ public sealed class RulesLoader {
 						while (idx < core.Length && char.IsDigit(core[idx]))
 							idx++;
 
-						int count = -1; // default: no count specified
+						int count = 1; // default of 1 is applied if no explicit count is provided
 						if (idx > 0) {
 							if (!int.TryParse(core.AsSpan(0, idx), out count)) {
 								LogLineParseError($"Invalid reactant count '{core[..idx]}'", core[..idx]);
@@ -347,6 +359,8 @@ public sealed class RulesLoader {
 							if (count < 0) {
 								LogLineParseError($"Reactant count must be positive, got '{count}'", core[..idx]);
 							}
+						} else {
+							LogLineParseInfo($"No explicit count found for reactant '{tok}'. Defaulting to 1");
 						}
 
 						// species part may include an explicit layer like LAYER:SPECIES
@@ -382,7 +396,7 @@ public sealed class RulesLoader {
 						// Check for exclusion conflicts: if any exclusion and others present, warn and keep originals
 						bool hasExclusion = group.Exists(r => r.Exclusion);
 						if (hasExclusion) {
-							Logger.Warn($"RULE WARNING: {_currentRawLine}\t\t - conflicting exclusion reactants for species '{entry.species}' in layer '{entry.layer}'; entries not merged.");
+							Logger.Warn($"MERGE WARNING: {_currentRawLine}\t\t - conflicting exclusion reactants for species '{entry.species}' in layer '{entry.layer}'; entries not merged.");
 							merged.AddRange(group);
 							continue;
 						}
@@ -391,7 +405,7 @@ public sealed class RulesLoader {
 						bool hasPlus = group.Exists(r => r.Sign > 0);
 						bool hasMinus = group.Exists(r => r.Sign < 0);
 						if (hasPlus && hasMinus) {
-							Logger.Warn($"RULE WARNING: {_currentRawLine}\t\t - conflicting reactant signs for species '{entry.species}' in layer '{entry.layer}' (both '+' and '-') ; entries not merged.");
+							Logger.Warn($"MERGE WARNING: {_currentRawLine}\t\t - conflicting reactant signs for species '{entry.species}' in layer '{entry.layer}' (both '+' and '-') ; entries not merged.");
 							merged.AddRange(group);
 							continue;
 						}
@@ -414,15 +428,15 @@ public sealed class RulesLoader {
 				}
 				var rightSide = right;
 				// right side: newSpecies * probability (standard replacement behavior)
-				var prob = 1.0;
+				var probability = 1.0; // default probability is 1.0 (certain) if not specified by '*(probability)' suffix
 				var newSpec = rightSide;
 				var star = rightSide.IndexOf('*');
 				if (star >= 0) {
 					newSpec = rightSide[..star].Trim();
 					var probStr = rightSide[(star + 1)..].Trim();
-					if (!double.TryParse(probStr, out prob)) {
-						LogLineParseError($"Invalid probability '{probStr}'", probStr);
-						prob = 1.0;
+					if (!double.TryParse(probStr, out probability)) {
+						LogLineParseError($"Invalid probability '{probStr}'. Using 0.0", probStr);
+						probability = 0.0;
 					}
 				}
 
@@ -461,7 +475,7 @@ public sealed class RulesLoader {
 					originSpecies,
 					reactants,
 					newSpec,
-					prob,
+					probability,
 					_currentRawLine,
 					xMin,
 					xMax,
