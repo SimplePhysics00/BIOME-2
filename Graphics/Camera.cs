@@ -155,7 +155,7 @@ public sealed class Camera(int viewportWidth, int viewportHeight) {
 
     // Public helper to rotate the camera by a delta in radians.
     public void RotateBy(float deltaRadians) {
-        Rotation += deltaRadians;
+        Rotation += deltaRadians * RotationSensitivity;
         // Normalize rotation to [-PI, PI]
         while (Rotation > MathF.PI) Rotation -= MathF.Tau;
         while (Rotation < -MathF.PI) Rotation += MathF.Tau;

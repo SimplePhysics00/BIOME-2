@@ -151,11 +151,11 @@ public sealed class InputState {
                     var dy = MouseY - _middleDragStart.Y;
                     if (dx * dx + dy * dy > 4.0f * 4.0f) {
                         _middleDragStarted = true;
-                        camera.RotateBy(MouseDeltaX * 0.005f);
+                        camera.RotateBy(MouseDeltaX);
                         HadInteraction = true;
                     }
                 } else {
-                    camera.RotateBy(MouseDeltaX * 0.005f);
+                    camera.RotateBy(MouseDeltaX);
                     HadInteraction = true;
                 }
             }
