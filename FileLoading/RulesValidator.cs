@@ -153,7 +153,7 @@ public static class RulesValidator
 
 		if (rulesMissing) {
 			paused = true;
-			Logger.Warn("No rules passed to validator; defaulting to PAUSE=1 to prevent simulation of nothing.");
+			Logger.Warn("Caught error, see above; no rules passed from validator. Defaulting to PAUSE=1 to prevent simulation of nothing.");
 		}
 
 		// config constructor handles additional validation

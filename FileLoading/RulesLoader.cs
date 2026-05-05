@@ -328,58 +328,71 @@ public sealed class RulesLoader {
 					var reactStr = originParts[1].Trim();
 					var list = new List<ReactantModel>();
 
-					// reactants are separated by whitespace (space, tabs, etc.)
-					var tokens = reactStr.Split((char[]) null, StringSplitOptions.RemoveEmptyEntries);
-					// e.g. +, -, 1FIRE2+ or SIMULATOR:COLOR1
-					bool pendingExclusion = false;
-					foreach (var tok in tokens) {
-						if (tok == "+") { pendingExclusion = false; continue; }
-						if (tok == "-") { pendingExclusion = true; continue; }
+                    // reactants are separated by whitespace (space, tabs, etc.)
+                    var tokens = reactStr.Split((char[]) null, StringSplitOptions.RemoveEmptyEntries);
+                    // e.g. +, -, 1FIRE2+ or SIMULATOR:COLOR1
+                    bool pendingExclusion = false;
+                    // require an explicit '+' or '-' token before each reactant
+                    bool sawSeparator = false;
+                    foreach (var tok in tokens) {
+                        if (tok == "+") { pendingExclusion = false; sawSeparator = true; continue; }
+                        if (tok == "-") { pendingExclusion = true; sawSeparator = true; continue; }
 
-						// determine sign from trailing + or - (this is different from a leading '-' token)
-						int sign = 0;
-						if (tok.EndsWith('+'))
-							sign = 1;
-						else if (tok.EndsWith('-'))
-							sign = -1;
+                        // If we reach here, token should be a reactant and must have been preceded by a separator
+                        if (!sawSeparator) {
+                            LogLineParseError($"Reactant missing preceding '+' or '-' separator for token '{tok}'", tok);
+                            // Skip this token and reset pendingExclusion to safe default
+                            pendingExclusion = false;
+                            continue;
+                        }
 
-						var core = tok.TrimEnd('+', '-');
+                        // determine sign from trailing + or - (this is different from a leading '-' token)
+                        int sign = 0;
+                        if (tok.EndsWith('+'))
+                            sign = 1;
+                        else if (tok.EndsWith('-'))
+                            sign = -1;
 
-						// core might start with a number (count) or be a layer-prefixed name
-						int idx = 0;
-						while (idx < core.Length && char.IsDigit(core[idx]))
-							idx++;
+                        var core = tok.TrimEnd('+', '-');
 
-						int count = -1;
-						if (idx > 0) {
-							if (!int.TryParse(core.AsSpan(0, idx), out count)) {
-								LogLineParseError($"Invalid reactant count '{core[..idx]}'", core[..idx]);
-							}
-							// validate count
-							if (count < 0) {
-								LogLineParseError($"Reactant count must be positive, got '{count}'", core[..idx]);
-							}
-						}
+                        // core might start with a number (count) or be a layer-prefixed name
+                        int idx = 0;
+                        while (idx < core.Length && char.IsDigit(core[idx]))
+                            idx++;
 
-						// species part may include an explicit layer like LAYER:SPECIES
-						var speciesPart = core[idx..];
-						string reactLayer = string.Empty;
-						string speciesName = speciesPart;
-						var colonPos = speciesPart.IndexOf(':');
-						if (colonPos >= 0) {
-							reactLayer = speciesPart[..colonPos];
-							speciesName = speciesPart[(colonPos + 1)..];
-						}
+                        int count = -1;
+                        if (idx > 0) {
+                            if (!int.TryParse(core.AsSpan(0, idx), out count)) {
+                                LogLineParseError($"Invalid reactant count '{core[..idx]}'", core[..idx]);
+                            }
+                            // validate count
+                            if (count < 0) {
+                                LogLineParseError($"Reactant count must be positive, got '{count}'", core[..idx]);
+                            }
+                        }
 
-						if (reactLayer == string.Empty && count == -1) {
-							// default count of 1 is applied if no explicit count is provided and no layer prefix is present
-							LogLineParseInfo($"No explicit count found for reactant '{tok}'. Defaulting to 1");
-							count = 1;
-						}
+                        // species part may include an explicit layer like LAYER:SPECIES
+                        var speciesPart = core[idx..];
+                        string reactLayer = string.Empty;
+                        string speciesName = speciesPart;
+                        var colonPos = speciesPart.IndexOf(':');
+                        if (colonPos >= 0) {
+                            reactLayer = speciesPart[..colonPos];
+                            speciesName = speciesPart[(colonPos + 1)..];
+                        }
 
-						list.Add(new ReactantModel(speciesName, reactLayer, count, sign, pendingExclusion));
-						pendingExclusion = false;
-					}
+                        if (reactLayer == string.Empty && count == -1) {
+                            // default count of 1 is applied if no explicit count is provided and no layer prefix is present
+                            LogLineParseInfo($"No explicit count found for reactant '{tok}'. Defaulting to 1");
+                            count = 1;
+                        }
+
+                        list.Add(new ReactantModel(speciesName, reactLayer, count, sign, pendingExclusion));
+                        
+						// reset state: we've just consumed a reactant
+                        pendingExclusion = false;
+                        sawSeparator = false;
+                    }
 
 					// Alert & merge compatible reactants of the same species and layer to simplify simulation checks.
 					// Group by (layer, species)
