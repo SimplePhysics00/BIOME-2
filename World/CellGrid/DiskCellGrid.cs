@@ -255,37 +255,110 @@ public sealed class DiskCellGrid : ICellGrid
     /// </summary>
     public (int X, int Y) MapWorldToCell(Vector2 worldPos, float cellSize)
     {
-        // World coordinates passed in are in renderer/world space where origin is top-left of backing grid.
-        // Convert to disk-centered coordinates to compute polar mapping.
+        // Mirror the GridVertexDisk/HighlightVertexDisk shader math to pick the
+        // instance (ring,pos) that contains the provided world position.
+        // Approach: for each instance produced by GetCellWorldPosition, transform
+        // the world point into the instance-local space used by the shader and
+        // check whether the computed local coordinates fall inside [0,1]^2.
+
         var center = GetBackingGridCenter(cellSize);
-        var rel = worldPos - center;
-        float L = rel.Length;
+        const float TWOPI = (float)(2.0 * Math.PI);
 
-        // Compute padded radii for each ring (same formula as used when generating instances)
-        float[] padded = new float[_rings];
-        for (int rr = 0; rr < _rings; rr++) {
-            float baseRad = (rr + 1) * cellSize;
-            float pad = cellSize * (0.25f + 0.75f * (float)Math.Exp(-baseRad / (cellSize * 4.0f)));
-            padded[rr] = baseRad + pad;
+        int bestR = -1, bestP = -1;
+        float bestDistSq = float.MaxValue;
+
+        for (int rr = 0; rr < _rings; rr++)
+        {
+            int cnt = _ringCounts[rr];
+            if (cnt <= 0) continue;
+
+            for (int pp = 0; pp < cnt; pp++)
+            {
+                var inst = GetCellWorldPosition(rr, pp, cellSize);
+                float ix = inst.X;
+                float iy = inst.Y;
+                double ang = inst.Z - (Math.PI * 0.5); // shader: aInstance.z - PI/2
+                float cntf = inst.W;
+
+                float ca = (float)Math.Cos(ang);
+                float sa = (float)Math.Sin(ang);
+
+                // world -> instance-local (inverse rotation)
+                float dx = worldPos.X - ix;
+                float dy = worldPos.Y - iy;
+                float localX = ca * dx + sa * dy;
+                float localY = -sa * dx + ca * dy;
+
+                // Recompute shader's radial/arc math for this instance
+                var centered = new Vector2(ix - center.X, iy - center.Y);
+                float radius = centered.Length;
+                float desiredRadius = cellSize * (1.0f + cntf / TWOPI);
+                float radialPad = desiredRadius;
+                float radiusForArc = radius + radialPad;
+
+                float arcOuter = (float)(TWOPI * Math.Max(radiusForArc, 1e-6f) / cntf);
+                float arcInner = (float)(TWOPI * Math.Max(radiusForArc - cellSize, 1e-6f) / cntf);
+                arcOuter *= 0.98f;
+                arcInner *= 0.98f;
+
+                float halfOuter = Math.Max(0.5f, 0.5f * arcOuter);
+                float halfInner = Math.Max(0.0f, Math.Min(0.5f * arcInner, halfOuter));
+
+                // In shader: yLocal = (aLocalPos.y - 0.5) * uCellSize + radialPad
+                float t = (localY - radialPad) / cellSize + 0.5f;
+                if (t < 0.0f || t > 1.0f) continue;
+
+                float halfWidth = (1.0f - t) * halfInner + t * halfOuter; // mix
+
+                float aLocalX = (localX / (2.0f * halfWidth)) + 0.5f;
+                if (aLocalX >= 0.0f && aLocalX <= 1.0f)
+                {
+                    return (rr, pp);
+                }
+
+                // Track nearest instance center in case no instance-local hit is found.
+                float ddx = worldPos.X - ix;
+                float ddy = worldPos.Y - iy;
+                float distSq = ddx * ddx + ddy * ddy;
+                if (distSq < bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    bestR = rr;
+                    bestP = pp;
+                }
+            }
         }
 
-        // Determine ring by checking which annular boundary L falls into. Boundaries are midpoints
-        // between adjacent padded radii. This avoids nearest-distance tie/rounding issues.
-        int r = -1;
-        for (int rr = 0; rr < _rings; rr++) {
-            float lower = (rr == 0) ? 0.0f : 0.5f * (padded[rr - 1] + padded[rr]);
-            float upper = (rr == _rings - 1) ? float.MaxValue : 0.5f * (padded[rr] + padded[rr + 1]);
-            if (L >= lower && L < upper) { r = rr; break; }
+        // If we found no instance-local hit, but the point lies inside the overall
+        // disk extent, return the nearest instance instead. Compute an approximate
+        // outer radius from disk center using the outermost ring's first instance.
+        bool insideDisk = false;
+        if (bestR != -1)
+        {
+            // find an outer ring instance to approximate disk extent
+            int outerRing = -1;
+            for (int r = _rings - 1; r >= 0; r--) if (_ringCounts[r] > 0) { outerRing = r; break; }
+            if (outerRing >= 0)
+            {
+                var oi = GetCellWorldPosition(outerRing, 0, cellSize);
+                var centerPos = GetBackingGridCenter(cellSize);
+                var outerCenter = new Vector2(oi.X, oi.Y);
+                float outerDist = (outerCenter - centerPos).Length;
+                // include a slack so points near the edge count
+                float slack = cellSize * 1.5f;
+                float dToCenter = (worldPos - centerPos).Length;
+                if (dToCenter <= outerDist + slack) insideDisk = true;
+            }
+        } else {
+            insideDisk = true;
+            bestR = 0;
         }
-        if (r < 0 || r >= _rings) return (-1, -1);
-        int cnt = _ringCounts[r];
-        if (cnt <= 0) return (-1, -1);
-        double angle = Math.Atan2(rel.Y, rel.X);
-        double frac = angle / (2.0 * Math.PI);
-        frac = frac - Math.Floor(frac);
-        int p = (int)Math.Round(frac * cnt) % cnt;
-        if (p < 0) p += cnt;
-        return (r, p);
+
+        if (insideDisk && bestR != -1) {
+            return (bestR, bestP);
+        }
+
+        return (-1, -1);
     }
 
     /// <summary>

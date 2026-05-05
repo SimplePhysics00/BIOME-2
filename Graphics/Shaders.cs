@@ -47,43 +47,58 @@ void main()
     gl_Position = uViewProj * vec4(worldPos.xy, 0.0, 1.0);
 }";
 
-	public const string GridVertexDisk = @"#version 450 core
+    public const string GridVertexDisk = @"#version 450 core
 
-layout(location = 0) in vec2 aLocalPos;
-layout(location = 1) in vec4 aInstance; // xy = origin, z = angle, w = ring count
-layout(location = 2) in vec2 aCellCoord;
+    layout(location = 0) in vec2 aLocalPos;
+    layout(location = 1) in vec4 aInstance; // xy = origin, z = angle, w = ring count
+    layout(location = 2) in vec2 aCellCoord;
 
-uniform mat4 uViewProj;
-uniform float uCellSize;
-uniform vec2 uGridSize;
-uniform vec2 uDiskCenter;
+    uniform mat4 uViewProj;
+    uniform float uCellSize;
+    uniform vec2 uGridSize;
+    uniform vec2 uDiskCenter;
 
-out vec2 vCellUv;
-flat out ivec2 vCellCoord;
+    out vec2 vCellUv;
+    flat out ivec2 vCellCoord;
 
-void main()
-{
-    float angle = aInstance.z - 1.57079632679; // -PI/2
-    float t = aLocalPos.y;
-    vec2 centered = aInstance.xy - uDiskCenter;
-    float radius = length(centered);
-    float radialPad = uCellSize * (0.25 + 0.75 * exp(-radius / (uCellSize * 4.0)));
-    float radiusForArc = radius + radialPad;
-    float cnt = max(1.0, aInstance.w);
-    float arcOuter = 2.0 * 3.14159265359 * max(radiusForArc, 1e-6) / cnt;
-    float arcInner = 2.0 * 3.14159265359 * max(radiusForArc - uCellSize, 1e-6) / cnt;
-    float halfOuter = max(0.5, 0.5 * arcOuter);
-    float halfInner = clamp(0.5 * arcInner, 0.0, halfOuter);
-    float halfWidth = mix(halfInner, halfOuter, t);
-    float xLocal = (aLocalPos.x - 0.5) * 2.0 * halfWidth;
-    float yLocal = (aLocalPos.y - 0.5) * uCellSize + radialPad;
-    float ca = cos(angle);
-    float sa = sin(angle);
-    vec2 worldPos = aInstance.xy + vec2(ca * xLocal - sa * yLocal, sa * xLocal + ca * yLocal);
-    vCellUv = aLocalPos;
-    vCellCoord = ivec2(int(aCellCoord.x + 0.5), int(aCellCoord.y + 0.5));
-    gl_Position = uViewProj * vec4(worldPos.xy, 0.0, 1.0);
-}";
+    const float TWOPI = 2.0 * 3.14159265359;
+
+    void main()
+    {
+        float angle = aInstance.z - 1.57079632679; // -PI/2
+        float t = aLocalPos.y;
+        vec2 centered = aInstance.xy - uDiskCenter;
+        float radius = length(centered);
+        float cnt = aInstance.w;
+
+        // Desired radius for this ring so that arc length = uCellSize
+        float desiredRadius = uCellSize * (1 + cnt / TWOPI);
+
+        // radialPad positions the cell's center at the desired radius
+        float radialPad = desiredRadius;
+        float radiusForArc = radius + radialPad;
+
+        // Compute arc lengths for outer and inner edges of the cell band
+        float arcOuter = TWOPI * max(radiusForArc, 1e-6) / cnt;
+        float arcInner = TWOPI * max(radiusForArc - uCellSize, 1e-6) / cnt;
+
+        // Slightly shrink the computed arc extents to reduce visual overlap at seams
+        arcOuter *= 0.98;
+        arcInner *= 0.98;
+
+        float halfOuter = max(0.5, 0.5 * arcOuter);
+        float halfInner = clamp(0.5 * arcInner, 0.0, halfOuter);
+        float halfWidth = mix(halfInner, halfOuter, t);
+
+        float xLocal = (aLocalPos.x - 0.5) * 2.0 * halfWidth;
+        float yLocal = (aLocalPos.y - 0.5) * uCellSize + radialPad;
+        float ca = cos(angle);
+        float sa = sin(angle);
+        vec2 worldPos = aInstance.xy + vec2(ca * xLocal - sa * yLocal, sa * xLocal + ca * yLocal);
+        vCellUv = aLocalPos;
+        vCellCoord = ivec2(int(aCellCoord.x + 0.5), int(aCellCoord.y + 0.5));
+        gl_Position = uViewProj * vec4(worldPos.xy, 0.0, 1.0);
+    }";
 
 	public const string GridFragmentRect = @"#version 450 core
 
@@ -297,47 +312,58 @@ void main()
     gl_Position = uViewProj * vec4(worldPos.xy, 0.0, 1.0);
 }";
 
-	public const string HighlightVertexDisk = @"#version 450 core
+   public const string HighlightVertexDisk = @"#version 450 core
 
-layout(location = 0) in vec2 aLocalPos;
-layout(location = 1) in vec4 aInstance; // origin.xy, z=angle, w=ringCount
+    layout(location = 0) in vec2 aLocalPos;
+    layout(location = 1) in vec4 aInstance; // origin.xy, z=angle, w=ringCount
 
-uniform mat4 uViewProj;
-uniform float uCellSize;
-uniform vec2 uDiskCenter;
+    uniform mat4 uViewProj;
+    uniform float uCellSize;
+    uniform vec2 uDiskCenter;
 
-out vec2 vRegionUv;
-out vec2 vRegionNorm;
-out vec2 vWorldPos;
-out vec2 vInstanceSize;
+    out vec2 vRegionUv;
+    out vec2 vRegionNorm;
+    out vec2 vWorldPos;
+    out vec2 vInstanceSize;
 
-const float PI = 3.14159265359;
+    const float TWOPI = 2.0 * 3.14159265359;
 
-void main()
-{
-    float angle = aInstance.z - PI * 0.5;
-    float t = aLocalPos.y;
-    vec2 centered = aInstance.xy - uDiskCenter;
-    float radius = length(centered);
-    float radialPad = uCellSize * (0.25 + 0.75 * exp(-radius / (uCellSize * 4.0)));
-    float radiusForArc = radius + radialPad;
-    float cnt = max(1.0, aInstance.w);
-    float arcOuter = 2.0 * PI * max(radiusForArc, 1e-6) / cnt;
-    float arcInner = 2.0 * PI * max(radiusForArc - uCellSize, 1e-6) / cnt;
-    float halfOuter = max(0.5, 0.5 * arcOuter);
-    float halfInner = clamp(0.5 * arcInner, 0.0, halfOuter);
-    float halfWidth = mix(halfInner, halfOuter, t);
-    float xLocal = (aLocalPos.x - 0.5) * 2.0 * halfWidth;
-    float yLocal = (aLocalPos.y - 0.5) * uCellSize + radialPad;
-    float ca = cos(angle);
-    float sa = sin(angle);
-    vec2 worldPos = aInstance.xy + vec2(ca * xLocal - sa * yLocal, sa * xLocal + ca * yLocal);
-    vRegionUv = aLocalPos * vec2(1.0, 1.0);
-    vRegionNorm = aLocalPos;
-    vWorldPos = worldPos;
-    vInstanceSize = vec2(1.0, 1.0);
-    gl_Position = uViewProj * vec4(worldPos.xy, 0.0, 1.0);
-}";
+    void main()
+    {
+        // Mirror the grid vertex math so highlights align with the disk cells
+        float angle = aInstance.z - 1.57079632679; // -PI/2
+        float t = aLocalPos.y;
+        vec2 centered = aInstance.xy - uDiskCenter;
+        float radius = length(centered);
+        float cnt = aInstance.w;
+
+        // Compute desired radius so arc length ~ uCellSize, matching GridVertexDisk
+        float desiredRadius = uCellSize * (1 + cnt / TWOPI);
+        float radialPad = desiredRadius;
+        float radiusForArc = radius + radialPad;
+
+        float arcOuter = TWOPI * max(radiusForArc, 1e-6) / cnt;
+        float arcInner = TWOPI * max(radiusForArc - uCellSize, 1e-6) / cnt;
+
+        arcOuter *= 0.98;
+        arcInner *= 0.98;
+
+        float halfOuter = max(0.5, 0.5 * arcOuter);
+        float halfInner = clamp(0.5 * arcInner, 0.0, halfOuter);
+        float halfWidth = mix(halfInner, halfOuter, t);
+
+        float xLocal = (aLocalPos.x - 0.5) * 2.0 * halfWidth;
+        float yLocal = (aLocalPos.y - 0.5) * uCellSize + radialPad;
+        float ca = cos(angle);
+        float sa = sin(angle);
+        vec2 worldPos = aInstance.xy + vec2(ca * xLocal - sa * yLocal, sa * xLocal + ca * yLocal);
+
+        vRegionUv = aLocalPos * vec2(1.0, 1.0);
+        vRegionNorm = aLocalPos;
+        vWorldPos = worldPos;
+        vInstanceSize = vec2(1.0, 1.0);
+        gl_Position = uViewProj * vec4(worldPos.xy, 0.0, 1.0);
+    }";
 
 	public const string HighlightFragmentRect = @"#version 450 core
 
