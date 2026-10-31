@@ -1,10 +1,10 @@
 using Biome2.Diagnostics;
+using Biome2.Input;
 using Biome2.Simulation;
 using Biome2.World;
 using Biome2.World.CellGrid;
 using ImGuiNET;
 using System.Numerics;
-using static Biome2.Input.PlacementModes;
 
 namespace Biome2.Graphics.UI;
 

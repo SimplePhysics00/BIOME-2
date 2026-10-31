@@ -1,7 +1,6 @@
 ﻿using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using OpenTK.Mathematics;
-using static Biome2.Input.PlacementModes;
 using Biome2.Graphics;
 using Biome2.World;
 using Biome2.World.CellGrid;
@@ -75,7 +74,7 @@ public sealed class InputState {
 
     // Compute hovered cell coordinates given camera and renderer
     public (int X, int Y) GetHoverCell(Camera camera, Renderer renderer) {
-        var worldPos = camera.ScreenToWorld(new Vector2(MouseX, MouseY), camera.Zoom);
+        var worldPos = camera.ScreenToWorld(new Vector2(MouseX, MouseY), camera.GetZoom());
         float cs = renderer.CellSize;
         // If renderer/world indicate a spiral topology, ask the DiskCellGrid to map world coords -> (ring,pos).
         var world = renderer.World;
@@ -182,7 +181,7 @@ public sealed class InputState {
         // Do not act when UI wants mouse
         if (GuiWantsMouse) return;
 
-        var worldPos = camera.ScreenToWorld(new Vector2(MouseX, MouseY), camera.Zoom);
+        var worldPos = camera.ScreenToWorld(new Vector2(MouseX, MouseY), camera.GetZoom());
         float cs = renderer.CellSize;
         int cellX, cellY;
         var world = renderer.World;
@@ -232,7 +231,7 @@ public sealed class InputState {
 
     private void FinalizeZonePlacement(Camera camera, Renderer renderer, Simulation.SimulationController simulation) {
         // compute end cell from current mouse
-        var worldPos = camera.ScreenToWorld(new Vector2(MouseX, MouseY), camera.Zoom);
+        var worldPos = camera.ScreenToWorld(new Vector2(MouseX, MouseY), camera.GetZoom());
         float cs = renderer.CellSize;
         int endX, endY;
         var world = renderer.World;

@@ -5,8 +5,8 @@ using Biome2.World;
 using OpenTK.Graphics.OpenGL4;
 using System.Runtime.InteropServices;
 using OpenTK.Mathematics;
-using static Biome2.Input.PlacementModes;
 using Biome2.World.CellGrid;
+using Biome2.Input;
 
 namespace Biome2.Graphics;
 
@@ -242,7 +242,7 @@ public sealed class Renderer(float cellSize) : IDisposable {
             }
         }
         if (uTimeH >= 0) GL.Uniform1(uTimeH, (float)DateTime.Now.TimeOfDay.TotalSeconds);
-        if (uPixelsPerUnitH >= 0) GL.Uniform1(uPixelsPerUnitH, camera.Zoom);
+        if (uPixelsPerUnitH >= 0) GL.Uniform1(uPixelsPerUnitH, camera.GetZoom());
         // If using hex topology and user is doing a zone placement, request rectangular highlight
         int useRect = (input.GetPlacementMode() == PlacementMode.ZONE && _world.GridTopology == GridTopology.HEX) ? 1 : 0;
         if (uUseRectH >= 0) GL.Uniform1(uUseRectH, useRect);
@@ -490,7 +490,7 @@ public sealed class Renderer(float cellSize) : IDisposable {
 
 		// Grid control uniforms
 		GL.Uniform1(_uShowGrid, ShowGrid ? 1 : 0);
-		GL.Uniform1(_uPixelsPerUnit, camera.Zoom);
+		GL.Uniform1(_uPixelsPerUnit, camera.GetZoom());
 		GL.Uniform1(_uGridThicknessPx, GridThicknessPixels);
 		GL.Uniform1(_uUseHex, _world.GridTopology == GridTopology.HEX ? 1 : 0);
 
