@@ -56,7 +56,16 @@ public sealed class WorldState {
 
     public GridTopology GridTopology { get; }
 
-    public WorldState(int widthCells, int heightCells, int layerCount, GridTopology topology = GridTopology.RECT, int depthCells = 1) {
+	public float InitSpeed { get; }
+
+	public WorldState(
+		int widthCells,
+		int heightCells,
+		int layerCount,
+		GridTopology topology = GridTopology.RECT,
+		float initSpeed = 1.0f,
+		int depthCells = 1
+	) {
 		// bound checking
 		var _widthCells = widthCells;
 		var _heightCells = heightCells;
@@ -85,6 +94,7 @@ public sealed class WorldState {
 		DepthCells = _depthCells;
 		LayerCount = _layerCount;
         GridTopology = topology;
+		InitSpeed = initSpeed;
 
 		CreateLayers();
 	}

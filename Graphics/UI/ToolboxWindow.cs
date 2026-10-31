@@ -16,15 +16,13 @@ internal sealed class ToolboxWindow
 	private const string RestartWorldButtonLabel = "Restart World";
 
 	// Stored delay value. Updated only when the user moves the slider.
-	// Defaults: delay = 0, slider position = 0.
-    private int DelayMs { get; set; } = 0;
-    // Cached slider position.
-    private float DelaySliderPos { get; set; } = 0.0f;
+    private int _delayMs { get; set; } = 0;
+    private float _delaySliderPos { get; set; } = 1.0f; // Cached slider position.
 
     private float _windowWidth;
-    // Per-species selection for placement
-    private bool[]? _selectedSpecies;
-    // Editable grid size fields (spinners)
+    private bool[]? _selectedSpecies; // Per-species selection for placement
+    
+	// Editable grid size fields (spinners)
     private int _gridWidth = 0;
     private int _gridHeight = 0;
     private int _gridDepth = 0; // for hex topology, optional depth dimension
@@ -58,6 +56,8 @@ internal sealed class ToolboxWindow
 		if (world != null) {
 			// If the world instance changed since last frame, update fields to match
 			if (!object.ReferenceEquals(_lastWorldRef, world)) {
+				_delaySliderPos = world.InitSpeed;
+				SetDelayFromSliderPos(simulation);
 				_gridWidth = world.WidthCells;
 				_gridHeight = world.HeightCells;
                 _gridDepth = world.DepthCells;
@@ -84,24 +84,22 @@ internal sealed class ToolboxWindow
         }
 
 		// Delay time slider: use a nonlinear curve so mid slider values yield small millisecond delays.
-		// Mapping: DelayTime (seconds) = slider^expo * 1.0 (max 1s). Inverse used to position the slider.
+		// Mapping: DelayTime (seconds) = slider^expo * 1.0 (max 1s). 
 		string tickDelayText;
-        if (DelayMs == 1)
-            tickDelayText = $"Tick Delay: ~{DelayMs} ms";
+        if (_delayMs == 1)
+            tickDelayText = $"Tick Delay: ~{_delayMs} ms";
         else
-            tickDelayText = $"Tick Delay: {DelayMs} ms";
+            tickDelayText = $"Tick Delay: {_delayMs} ms";
 
 		ImGui.Text(tickDelayText);
 		// Use cached slider position; it defaults to 0 and is updated only when
 		// the user moves the control.
-		float sliderPos = DelaySliderPos;
+		float sliderPos = _delaySliderPos;
 		ImGui.PushItemWidth(-1);
 		if (ImGui.SliderFloat("##TickDelayTime", ref sliderPos, 0.0f, 1.0f)) {
 			// store new slider position
-			DelaySliderPos = sliderPos;
-			float newDelay = MathF.Pow(Math.Clamp(sliderPos, 0.0f, 1.0f),  4);
-			simulation.SetDelayTime(newDelay);
-			DelayMs = (int) Math.Ceiling(newDelay * 1000.0f);
+			_delaySliderPos = sliderPos;
+			SetDelayFromSliderPos(simulation);
 		}
 		ImGui.PopItemWidth();
 
@@ -254,5 +252,11 @@ internal sealed class ToolboxWindow
 		_windowWidth = ImGui.GetWindowWidth();
 
 		ImGui.End();
+	}
+
+	private void SetDelayFromSliderPos(SimulationController simulation) {
+		float newDelay = MathF.Pow(Math.Clamp(1.0f - _delaySliderPos, 0.0f, 1.0f), 4);
+		simulation.SetDelayTime(newDelay);
+		_delayMs = (int) Math.Ceiling(newDelay * 1000.0f);
 	}
 }

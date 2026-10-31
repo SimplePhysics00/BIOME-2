@@ -12,18 +12,21 @@ public class WorldConfigModel {
 	// Topology: optional, defaults to rectangular for backward compatibility.
 	public GridTopology GridTopology { get; init; } = GridTopology.RECT;
 
+	public float InitSpeed { get; init; } = 1.0f;
+
 	// Edge handling mode for neighbor queries
 	public EdgeMode Edges { get; init; } = EdgeMode.BORDER;
 
 	public bool Paused { get; init; }
 
 	public WorldConfigModel(
+		bool paused,
 		int width,
 		int height,
 		int depth,
+		float initSpeed,
 		GridTopology gridTopology,
-		EdgeMode edgeMode,
-		bool paused
+		EdgeMode edgeMode
 	) {
 		if (width <= 0) {
 			Logger.Warn("WIDTH setting is missing or non-positive; defaulting to 1.");
@@ -46,10 +49,19 @@ public class WorldConfigModel {
 			}
 		}
 
+		if (initSpeed <= 0) {
+			Logger.Warn("SPEED setting is non-positive; defaulting to 0.0.");
+			initSpeed = 0.0f;
+		} else if (initSpeed > 1.0f) {
+			Logger.Warn("SPEED setting is invalid (too high); defaulting to 1.0.");
+			initSpeed = 1.0f;
+		}
+
 		Width = width;
 		Height = height;
 		HexDepth = depth;
 		GridTopology = gridTopology;
+		InitSpeed = initSpeed;
 		Edges = edgeMode;
 		Paused = paused;
 	}

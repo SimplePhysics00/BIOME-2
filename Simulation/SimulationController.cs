@@ -122,12 +122,13 @@ public sealed class SimulationController : IDisposable {
 		    if (_lastWorldModel != null)
             {
                 var config = new WorldConfigModel(
+                    paused: _lastWorldModel.Config.Paused,
                     width: width,
                     height: height,
                     depth: depth,
+                    initSpeed: _lastWorldModel.Config.InitSpeed,
                     gridTopology: _lastWorldModel.Config.GridTopology,
-                    edgeMode: _lastWorldModel.Config.Edges,
-                    paused: _lastWorldModel.Config.Paused
+                    edgeMode: _lastWorldModel.Config.Edges
                 );
 
 			    var req = new WorldModel(
@@ -234,7 +235,9 @@ public sealed class SimulationController : IDisposable {
         // Construct new runtime world state using requested topology.
         var topology = worldModel.Config.GridTopology;
 
-		var newWorld = new WorldState(newWidth, newHeight, newLayerCount, topology, newDepth);
+        var initSpeed = worldModel.Config.InitSpeed;
+
+		var newWorld = new WorldState(newWidth, newHeight, newLayerCount, topology, initSpeed, newDepth);
 
         // Preserve previously selected active layer index where possible so the view
         // remains on the same layer after applying new rules (unless the new world

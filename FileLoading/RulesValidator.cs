@@ -114,8 +114,9 @@ public static class RulesValidator
 	}
 
 	private static WorldConfigModel ValidateConfig(Dictionary<string, string> settings, bool rulesMissing) {
-		int w = 0, h = 0, d = 0;
 		bool paused = false;
+		int w = 0, h = 0, d = 0;
+		float initSpeed = 1.0f;
 		var edgeMode = EdgeMode.BORDER;
 		var gridTopology = GridTopology.RECT;
 
@@ -127,6 +128,9 @@ public static class RulesValidator
 
 		if (settings.TryGetValue("DEPTH", out var ds))
 			_=int.TryParse(ds, out d);
+
+		if (settings.TryGetValue("SPEED", out var sv))
+			_=float.TryParse(sv, out initSpeed);
 
 		if (settings.TryGetValue("SHAPE", out var shape)) {
 			if (!string.IsNullOrEmpty(shape) && string.Equals(shape.Trim(), "SPIRAL", StringComparison.OrdinalIgnoreCase)) {
@@ -158,12 +162,13 @@ public static class RulesValidator
 
 		// config constructor handles additional validation
 		var config = new WorldConfigModel(
+			paused: paused,
 			width: w,
 			height: h,
 			depth: d,
+			initSpeed: initSpeed,
 			gridTopology: gridTopology,
-			edgeMode: edgeMode,
-			paused: paused
+			edgeMode: edgeMode
 		);
 
 		return config;
